@@ -8,32 +8,71 @@
 {% endmacro %}
 
 {% block content %}
+{% set published_count = surveys | selectattr('status.value', 'equalto', 'published') | list | length %}
+{% set total_responses = counts.values() | sum if counts else 0 %}
+
 <div class="page-head">
   <div>
+    <span class="kicker">Übersicht</span>
     <h1>Umfragen</h1>
-    <p class="lede">Anlegen, bearbeiten, veröffentlichen und auswerten.</p>
+  </div>
+  {% if templates_available %}
+    <div class="button-row">
+      <button type="button" class="button-secondary" data-open-create="file">Aus Datei importieren</button>
+      <button type="button" data-open-create="template">Neue Umfrage</button>
+    </div>
+  {% endif %}
+</div>
+
+<div class="stat-row">
+  <div class="stat">
+    <div class="stat-value">{{ surveys | length }}</div>
+    <div class="stat-label">Umfragen</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value stat-accent">{{ published_count }}</div>
+    <div class="stat-label">Veröffentlicht</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ total_responses }}</div>
+    <div class="stat-label">Antworten gesamt</div>
   </div>
 </div>
 
-{% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}
+{% if error %}<div class="notice notice-error" style="margin-top: 24px">{{ error }}</div>{% endif %}
 {% if created %}
-  <div class="notice notice-ok">
+  <div class="notice notice-ok" style="margin-top: 24px">
     Umfrage aus der Datei angelegt: {{ created }} Antworten importiert,
     Auswahllisten aus den Daten übernommen.
   </div>
 {% endif %}
 
-<div class="card">
-  <h2>Neue Umfrage anlegen</h2>
-  {% if templates_available %}
-    <form method="post" action="/surveys">
+{% if templates_available %}
+  {# One panel with two modes, instead of two stacked forms competing for
+     attention. Opened from the page head; open by default after an error. #}
+  <div class="panel" id="create-panel" {% if not error %}hidden{% endif %}>
+    <div class="page-head" style="border: none; padding: 0; margin-bottom: 20px; align-items: flex-start">
+      <div>
+        <h2>Neue Umfrage anlegen</h2>
+        <p class="section-note">
+          Zeitfenster und Auswahllisten werden aus der Vorlage übernommen und lassen sich
+          anschließend im Editor anpassen.
+        </p>
+      </div>
+      <div class="button-row">
+        <button type="button" class="button-secondary" data-create-mode="template" aria-pressed="true">Aus Vorlage</button>
+        <button type="button" class="button-secondary" data-create-mode="file" aria-pressed="false">Aus Ergebnisdatei</button>
+      </div>
+    </div>
+
+    <form method="post" action="/surveys" data-create-form="template">
       <div class="field-row">
-        <div>
+        <div class="field">
           <label for="title">Titel <span class="hint">— sehen die Teilnehmer:innen</span></label>
           <input type="text" id="title" name="title" required
                  placeholder="z. B. Questionnaire for the 57th Heidelberg Physics Graduate Days">
         </div>
-        <div>
+        <div class="field">
           <label for="template_id">Vorlage</label>
           <select id="template_id" name="template_id">
             {% for template in templates_available %}
@@ -44,86 +83,105 @@
         <button type="submit">Anlegen</button>
       </div>
     </form>
-    <p class="small muted" style="margin: 10px 0 0">
-      Zeitfenster und Auswahllisten werden aus der Vorlage übernommen und lassen sich
-      anschließend im Editor anpassen.
-    </p>
 
-    <hr style="border: none; border-top: 1px solid var(--rule); margin: 20px 0">
-
-    <h2>… oder aus einer früheren Ergebnisdatei</h2>
-    <p class="small muted" style="margin-top: -6px">
-      Legt die Umfrage an, liest die Antworten ein und übernimmt die Vorlesungen direkt aus der
-      Datei — der Editor ist damit schon gefüllt und die Auswertung sofort möglich.
-    </p>
-    <form method="post" action="/surveys/from-file" enctype="multipart/form-data">
+    <form method="post" action="/surveys/from-file" enctype="multipart/form-data"
+          data-create-form="file" hidden>
+      <p class="section-note" style="margin-bottom: 16px">
+        Legt die Umfrage an, liest die Antworten ein und übernimmt die Vorlesungen direkt aus der
+        Datei — der Editor ist damit schon gefüllt und die Auswertung sofort möglich.
+      </p>
       <div class="field-row">
-        <div>
+        <div class="field">
           <label for="file_title">Titel</label>
           <input type="text" id="file_title" name="title" required
                  placeholder="z. B. 56th Graduate Days (Archiv)">
         </div>
-        <div>
+        <div class="field">
           <label for="results_file">Ergebnisdatei (JSON)</label>
           <input type="file" id="results_file" name="file" accept="application/json,.json" required>
         </div>
-        <button type="submit" class="button-secondary">Anlegen &amp; importieren</button>
+        <button type="submit">Anlegen &amp; importieren</button>
       </div>
       <input type="hidden" name="template_id" value="{{ templates_available[0].id }}">
     </form>
-  {% else %}
-    <div class="notice notice-error" style="margin: 0">
-      Es ist noch keine Vorlage hinterlegt. Einmalig ausführen:
-      <code>python scripts/bootstrap_template.py</code>
-    </div>
-  {% endif %}
-</div>
+  </div>
+{% else %}
+  <div class="notice notice-error" style="margin-top: 24px">
+    Es ist noch keine Vorlage hinterlegt. Einmalig ausführen:
+    <code>python scripts/bootstrap_template.py</code>
+  </div>
+{% endif %}
 
-<div class="card">
-  <h2>Bestehende Umfragen</h2>
-  {% if surveys %}
-    <table class="data">
-      <thead>
+{% if surveys %}
+  <table class="data" style="margin-top: 32px">
+    <thead>
+      <tr>
+        <th style="width: 40%">Titel</th>
+        <th>Status</th>
+        <th class="numeric">Antworten</th>
+        <th>Zuletzt bearbeitet</th>
+        <th>Veröffentlicht</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for survey in surveys %}
         <tr>
-          <th>Titel</th>
-          <th>Status</th>
-          <th class="numeric">Antworten</th>
-          <th>Erstellt</th>
-          <th>Zuletzt bearbeitet</th>
-          <th>Veröffentlicht</th>
-          <th>Geschlossen</th>
-          <th></th>
+          <td>
+            <a class="row-title" href="/surveys/{{ survey.id }}/edit">{{ survey.title }}</a>
+            <div class="row-sub">
+              {{ survey.slots | length }} Zeitfenster
+              {%- if survey.created_at %} · angelegt {{ survey.created_at.strftime('%d.%m.%Y') }}{% endif %}
+            </div>
+          </td>
+          <td>
+            <span class="chip chip-{{ survey.status.value }}">{{ status_labels[survey.status.value] }}</span>
+          </td>
+          <td class="numeric">{{ counts.get(survey.id, 0) }}</td>
+          <td class="when">{{ when(survey.updated_at) }}</td>
+          <td class="when">{{ when(survey.published_at) }}</td>
+          <td style="text-align: right">
+            <span class="row-actions">
+              <a class="button button-quiet" href="/surveys/{{ survey.id }}/edit">Öffnen →</a>
+            </span>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        {% for survey in surveys %}
-          <tr>
-            <td><a href="/surveys/{{ survey.id }}/edit"><strong>{{ survey.title }}</strong></a></td>
-            <td>
-              <span class="chip chip-{{ survey.status.value }}">
-                {{ status_labels[survey.status.value] }}
-              </span>
-            </td>
-            <td class="numeric">{{ counts.get(survey.id, 0) }}</td>
-            <td class="when">{{ when(survey.created_at) }}</td>
-            <td class="when">{{ when(survey.updated_at) }}</td>
-            <td class="when">{{ when(survey.published_at) }}</td>
-            <td class="when">{{ when(survey.closed_at) }}</td>
-            <td>
-              <div class="button-row">
-                <a class="button button-secondary" href="/surveys/{{ survey.id }}/edit">Bearbeiten</a>
-                <a class="button button-secondary" href="/surveys/{{ survey.id }}/distribute">Veröffentlichen</a>
-                <a class="button button-secondary" href="/surveys/{{ survey.id }}/report">Auswertung</a>
-                <a class="button button-secondary" href="/surveys/{{ survey.id }}/data">Daten</a>
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <p class="small muted" style="margin: 12px 0 0">Zeiten in UTC.</p>
-  {% else %}
-    <p class="muted">Noch keine Umfrage angelegt.</p>
-  {% endif %}
-</div>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="small muted" style="margin: 12px 0 0">Alle Zeiten in UTC.</p>
+{% else %}
+  <p class="muted" style="margin-top: 32px">Noch keine Umfrage angelegt.</p>
+{% endif %}
+
+{% if templates_available %}
+<script>
+  (function () {
+    var panel = document.getElementById("create-panel");
+    var forms = {
+      template: panel.querySelector('[data-create-form="template"]'),
+      file: panel.querySelector('[data-create-form="file"]')
+    };
+
+    function show(mode) {
+      panel.hidden = false;
+      Object.keys(forms).forEach(function (key) {
+        forms[key].hidden = key !== mode;
+      });
+      panel.querySelectorAll("[data-create-mode]").forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.createMode === mode));
+      });
+      var first = forms[mode].querySelector("input");
+      if (first) first.focus();
+    }
+
+    document.querySelectorAll("[data-open-create]").forEach(function (button) {
+      button.addEventListener("click", function () { show(this.dataset.openCreate); });
+    });
+    panel.querySelectorAll("[data-create-mode]").forEach(function (button) {
+      button.addEventListener("click", function () { show(this.dataset.createMode); });
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

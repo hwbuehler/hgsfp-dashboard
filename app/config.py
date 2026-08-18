@@ -26,8 +26,18 @@ class Settings(BaseSettings):
     database_path: Path = Path("data/hgsfp.db")
     model_path: Path = Path("models/all-MiniLM-L6-v2")
 
-    # Clustering parameters, mirrored from the original survey_analyzer defaults.
-    cluster_distance_threshold: float = 0.5
+    # Cosine distances for comment grouping: 0.45 merges while average
+    # similarity stays at or above 0.55.
+    #
+    # Organisation comments are prose about a handful of recurring themes, so a
+    # looser bar produces useful groups ("more cake", "better coffee breaks").
+    # Topic suggestions are short noun phrases where the model mistakes
+    # "sounds like physics" for "same subject" — at 0.45 it puts Mathematical
+    # Physics, Environmental Physics and Physical Chemistry in one group. A
+    # tight bar keeps only genuine duplicates ("2D materials" / "2d Materials"),
+    # which is what the counts next to each entry need in order to mean anything.
+    comment_cluster_distance: float = 0.45
+    topic_cluster_distance: float = 0.30
     topic_split_similarity_threshold: float = 0.2
 
     @property

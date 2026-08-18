@@ -141,7 +141,7 @@ Portiert aus `survey_analyzer.py`, das Berechnung und fpdf-Ausgabe in einer Klas
 | `constants.py` | Fragensatz und Likert-Skalen, unverändert übernommen |
 | `aggregate.py` | Antworten nach Vorlesung gruppieren |
 | `statistics.py` | Mittelwert, Standardabweichung, Verteilungen |
-| `clustering.py` | Kommentare gruppieren (sentence-transformers, lazy geladen) |
+| `clustering.py` | Kommentare gruppieren (sentence-transformers, lazy geladen), siehe unten |
 | `charts.py` | Likert-Balken als Inline-SVG |
 | `report.py` | Report-Kontext je Abschnitt |
 | `pipeline.py` | Hintergrund-Job, schreibt den Cache |
@@ -151,6 +151,26 @@ Portiert aus `survey_analyzer.py`, das Berechnung und fpdf-Ausgabe in einer Klas
 Zwei Regeln aus dem Original bleiben absichtlich erhalten: die Standardabweichung ist die
 Stichproben-Standardabweichung (`ddof=1`), und bei fünf oder weniger Antworten wird keine
 Statistik ausgewiesen.
+
+#### Kommentar-Clustering
+
+Das Original übernahm scikit-learns Voreinstellung `metric="euclidean"`, `linkage="ward"` mit
+`distance_threshold=0.5`. Da das Modell L2-normierte Vektoren liefert, entspricht das einer
+geforderten Kosinus-Ähnlichkeit von 0,875 — höher als das ähnlichste Paar in den Beispieldaten
+(0,873). Es konnte nichts zusammengefasst werden, die „geclusterten" Kommentare waren stets mit
+den rohen identisch.
+
+Jetzt `metric="cosine"`, `linkage="average"`; die Schwelle ist damit direkt als Kosinus-Distanz
+lesbar. Die beiden Freitextfelder verhalten sich unterschiedlich und bekommen eigene Werte
+(`app/config.py`):
+
+| Feld | Distanz | Wirkung |
+|---|---|---|
+| `sugg_organization` | `0.45` (cos ≥ 0,55) | Prosa zu wiederkehrenden Themen — fasst „mehr Kuchen", „bessere Kaffeepausen" sinnvoll zusammen |
+| `sugg_topics` | `0.30` (cos ≥ 0,70) | kurze Stichworte — nur echte Dubletten („2D materials"/„2d Materials"); lockerer gruppiert das Modell „Mathematical Physics" mit „Physical Chemistry" und verfälscht damit die Nennungszahlen |
+
+Die Überschrift einer Gruppe ist ihr Medoid, nicht das erste Element — sonst hinge sie davon ab,
+in welcher Reihenfolge die Antworten eingegangen sind.
 
 Charts entstehen ohne matplotlib. Der Balken ist eine einzelne gestapelte Reihe; direkt
 erzeugtes SVG erlaubt die 2px-Lücken zwischen den Segmenten und die abgerundeten Außenkanten,

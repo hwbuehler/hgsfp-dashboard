@@ -1,5 +1,5 @@
 {# HTMX fragment: one lecture slot with its choices. Swapped in place on edit.
-   `saved_message` is set by the route that just wrote to the database, so the
+   saved_message is set by the route that just wrote to the database, so the
    confirmation reflects a completed write rather than a hopeful client guess. #}
 <div id="slot-body-{{ slot.id }}">
   {# Autosave targets the status line, not the whole fragment: replacing the
@@ -8,11 +8,11 @@
         hx-trigger="submit, input changed delay:1500ms"
         hx-target="#slot-status-{{ slot.id }}" hx-swap="innerHTML">
     <div class="field-row">
-      <div>
+      <div class="field">
         <label for="page_title-{{ slot.id }}">Zeitfenster</label>
         <input type="text" id="page_title-{{ slot.id }}" name="page_title" value="{{ slot.page_title }}" required>
       </div>
-      <div>
+      <div class="field">
         <label for="key_prefix-{{ slot.id }}">
           Schlüssel-Präfix <span class="hint">— {{ slot.key_prefix }}_title, {{ slot.key_prefix }}_interesting …</span>
         </label>
@@ -32,15 +32,11 @@
     <span class="autosave-hint">Änderungen werden automatisch gespeichert.</span>
   </div>
 
-  <div class="column-labels" style="margin-top: 10px">
+  <div class="column-labels" style="margin-top: 20px">
     <span>Titel im Auswahlmenü</span>
     <span>Schlüssel in der Ergebnisdatei</span>
     <span></span>
   </div>
-  <p class="small muted" style="margin: 0 0 6px">
-    Beide Felder sind direkt bearbeitbar. Wird ein Schlüssel geändert, werden bereits
-    gespeicherte Antworten mit umgestellt.
-  </p>
 
   <ul class="choice-list">
     {% for choice in slot.choices %}
@@ -59,7 +55,7 @@
         <form hx-post="/surveys/{{ slot.survey_id }}/slots/{{ slot.id }}/choices/{{ choice.id }}/delete"
               hx-target="#slot-body-{{ slot.id }}" hx-swap="outerHTML"
               hx-confirm="„{{ choice.text }}“ wirklich entfernen?">
-          <button type="submit" class="button-danger">Entfernen</button>
+          <button type="submit" class="button-secondary" aria-label="„{{ choice.text }}“ entfernen">Entfernen</button>
         </form>
       </li>
     {% else %}
@@ -74,21 +70,22 @@
     </li>
   </ul>
 
-  <p class="small muted" style="margin: 0 0 10px">
+  <p class="small muted" style="margin: 0 0 12px">
     {{ slot.choices | length }} Vorlesung{{ '' if slot.choices | length == 1 else 'en' }} gespeichert
-    (zzgl. „{{ slot.dna_text }}“).
+    (zzgl. „{{ slot.dna_text }}“). Beide Felder sind direkt bearbeitbar; wird ein Schlüssel geändert,
+    werden bereits gespeicherte Antworten mit umgestellt.
   </p>
 
   <form hx-post="/surveys/{{ slot.survey_id }}/slots/{{ slot.id }}/choices"
         hx-target="#slot-body-{{ slot.id }}" hx-swap="outerHTML"
         hx-on::after-request="if(event.detail.successful) this.reset()">
     <div class="field-row">
-      <div>
+      <div class="field">
         <label for="text-{{ slot.id }}">Titel der Vorlesung</label>
         <input type="text" id="text-{{ slot.id }}" name="text"
                placeholder="z. B. Evolution of the Dark Universe" required>
       </div>
-      <div>
+      <div class="field">
         <label for="value-{{ slot.id }}">Schlüssel</label>
         <input type="text" id="value-{{ slot.id }}" name="value" placeholder="z. B. Peacock" required>
       </div>
@@ -96,10 +93,10 @@
     </div>
   </form>
 
-  <div class="button-row" style="margin-top: 12px">
+  <div class="button-row" style="margin-top: 16px">
     <form method="post" action="/surveys/{{ slot.survey_id }}/slots/{{ slot.id }}/delete"
           onsubmit="return confirm('Zeitfenster „{{ slot.page_title }}“ mit allen Auswahlmöglichkeiten löschen?')">
-      <button type="submit" class="button-danger">Zeitfenster löschen</button>
+      <button type="submit" class="button-quiet">Zeitfenster löschen</button>
     </form>
   </div>
 </div>

@@ -2,56 +2,76 @@
 {% block title %}Auswertung — {{ survey.title }}{% endblock %}
 
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Auswertung</h1>
-    <p class="lede">{{ survey.title }} · {{ response_count }} Antworten</p>
-  </div>
-  <div class="button-row">
-    <a class="button button-secondary" href="/dashboard">Übersicht</a>
-    <a class="button button-secondary" href="/surveys/{{ survey.id }}/edit">Bearbeiten</a>
-  </div>
-</div>
-
-{% if created %}
-  <div class="notice notice-ok">
-    Umfrage angelegt und {{ created }} Antworten importiert. Die Vorlesungen wurden aus der Datei
-    übernommen — im <a href="/surveys/{{ survey.id }}/edit">Editor</a> lassen sich die Anzeigetitel
-    ergänzen. Jetzt „Analyse starten“.
-  </div>
-{% endif %}
-
-{% if is_stale %}
-  <div class="notice notice-error">
-    Die Umfrage wurde nach der letzten Analyse bearbeitet. Vorschau und PDF zeigen noch den
-    alten Stand — „Analyse neu berechnen“, um sie zu aktualisieren.
-  </div>
-{% endif %}
-
-<div class="card">
-  <h2>Analyse</h2>
-  {% with survey_id = survey.id, reloaded = (context is not none) %}
-    {% include "report/_status.html" %}
-  {% endwith %}
-
-  <form method="post" action="/surveys/{{ survey.id }}/analysis" style="margin-top: 14px">
+{% set head_actions %}
+  {% if context %}
+    <a class="button button-secondary" href="/surveys/{{ survey.id }}/report/all" target="_blank">
+      Gesamt-Report ansehen
+    </a>
+  {% endif %}
+  <form method="post" action="/surveys/{{ survey.id }}/analysis">
     <button type="submit" {% if response_count == 0 %}disabled{% endif %}>
       {% if context %}Analyse neu berechnen{% else %}Analyse starten{% endif %}
     </button>
-    {% if response_count == 0 %}
-      <span class="small muted" style="margin-left: 10px">
-        Noch keine Antworten — unter „Daten“ lässt sich eine bestehende Ergebnisdatei importieren.
-      </span>
-    {% endif %}
   </form>
+{% endset %}
+{% with active = 'report' %}{% include "_survey_head.html" %}{% endwith %}
+
+<div style="margin-top: 32px">
+  {% if created %}
+    <div class="notice notice-ok">
+      <p>
+        Umfrage angelegt und {{ created }} Antworten importiert. Die Vorlesungen wurden aus der
+        Datei übernommen — im <a href="/surveys/{{ survey.id }}/edit">Editor</a> lassen sich die
+        Anzeigetitel ergänzen. Jetzt „Analyse starten“.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if is_stale %}
+    <div class="notice notice-error">
+      <p>
+        Die Umfrage wurde nach der letzten Analyse bearbeitet. Vorschau und PDF zeigen noch den
+        alten Stand — „Analyse neu berechnen“, um sie zu aktualisieren.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if response_count == 0 %}
+    <div class="notice">
+      <p>
+        Noch keine Antworten — unter <a href="/surveys/{{ survey.id }}/data">Daten</a> lässt sich
+        eine bestehende Ergebnisdatei importieren.
+      </p>
+    </div>
+  {% endif %}
+</div>
+
+<div class="section">
+  <div>
+    <h2>Analyse</h2>
+    <p class="section-note">Kommentar-Clustering kann einige Sekunden dauern.</p>
+  </div>
+  <div>
+    {% with survey_id = survey.id, reloaded = (context is not none) %}
+      {% include "report/_status.html" %}
+    {% endwith %}
+    {% if context and not context.clustering_available %}
+      <div class="notice notice-error" style="margin: 16px 0 0">
+        <p>
+          Kommentar-Clustering wurde übersprungen: {{ context.clustering_note }}
+          Die Kommentare erscheinen ungruppiert im Report.
+        </p>
+      </div>
+    {% endif %}
+  </div>
 </div>
 
 {% if context %}
-  <div class="card">
-    <h2>Vorschau je Vorlesung</h2>
-    <p class="small muted" style="margin-top: -6px">
-      Die Vorschau zeigt exakt das Layout, das auch das PDF verwendet.
-    </p>
+  <div class="section">
+    <div>
+      <h2>Vorschau je Vorlesung</h2>
+      <p class="section-note">Die Vorschau zeigt exakt das Layout, das auch das PDF verwendet.</p>
+    </div>
     <div class="card-grid">
       {% for section in context.sections %}
         <a class="tile" href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">
@@ -65,52 +85,46 @@
     </div>
   </div>
 
-  <div class="card">
-    <h2>Export</h2>
-    <div class="button-row">
-      <a class="button" href="/surveys/{{ survey.id }}/report/all" target="_blank">
-        Gesamt-Report ansehen
-      </a>
-      <a class="button button-secondary" href="/surveys/{{ survey.id }}/report/all/pdf">
-        Gesamt-Report als PDF
-      </a>
-      <a class="button button-secondary" href="/surveys/{{ survey.id }}/reports.zip">
-        Alle Einzel-PDFs als ZIP
-      </a>
+  <div class="section">
+    <div>
+      <h2>Export</h2>
+      <p class="section-note">
+        Einzelne Vorlesungen: Vorschau öffnen und dort „als PDF“ anhängen, oder direkt
+        <code>/surveys/{{ survey.id }}/report/&lt;abschnitt&gt;/pdf</code> aufrufen.
+      </p>
     </div>
-    <p class="small muted" style="margin-top: 12px">
-      Einzelne Vorlesungen: Vorschau öffnen und dort „als PDF“ anhängen, oder direkt
-      <code>/surveys/{{ survey.id }}/report/&lt;abschnitt&gt;/pdf</code> aufrufen.
-    </p>
-    {% if not context.clustering_available %}
-      <div class="notice notice-error" style="margin: 14px 0 0">
-        Kommentar-Clustering wurde übersprungen: {{ context.clustering_note }}
-        Die Kommentare erscheinen ungruppiert im Report.
+    <div>
+      <div class="button-row">
+        <a class="button button-secondary" href="/surveys/{{ survey.id }}/report/all/pdf">
+          Gesamt-Report als PDF
+        </a>
+        <a class="button button-secondary" href="/surveys/{{ survey.id }}/reports.zip">
+          Alle Einzel-PDFs als ZIP
+        </a>
       </div>
-    {% endif %}
-  </div>
 
-  <div class="card">
-    <h2>Einzel-PDFs</h2>
-    <table class="data">
-      <thead><tr><th>Abschnitt</th><th>Antworten</th><th></th></tr></thead>
-      <tbody>
-        {% for section in context.sections %}
-          <tr>
-            <td>{{ section.title }}</td>
-            <td>{{ section.response_count }}</td>
-            <td>
-              <div class="button-row">
-                <a class="button button-secondary"
-                   href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">Vorschau</a>
-                <a class="button button-secondary"
-                   href="/surveys/{{ survey.id }}/report/{{ section.scope }}/pdf">PDF</a>
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <table class="data" style="margin-top: 24px">
+        <thead>
+          <tr><th>Abschnitt</th><th class="numeric">Antworten</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for section in context.sections %}
+            <tr>
+              <td>{{ section.title }}</td>
+              <td class="numeric">{{ section.response_count }}</td>
+              <td style="text-align: right">
+                <span class="row-actions">
+                  <a class="button button-quiet"
+                     href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">Vorschau</a>
+                  <a class="button button-quiet"
+                     href="/surveys/{{ survey.id }}/report/{{ section.scope }}/pdf">PDF</a>
+                </span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 {% endif %}
 {% endblock %}

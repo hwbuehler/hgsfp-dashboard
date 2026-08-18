@@ -1,0 +1,36 @@
+{# Shared context header for every survey page: back link, title, status meta
+   and the four tabs. Include it instead of repeating button rows per page.
+   Callers set "active" to one of edit / distribute / report / data, and may
+   set "head_actions" via {% set head_actions %}…{% endset %} for the page's
+   own actions (at most one primary). #}
+
+{% set status_labels = {'draft': 'Entwurf', 'published': 'Veröffentlicht', 'closed': 'Geschlossen'} %}
+
+<div class="page-head">
+  <div>
+    <a class="kicker" href="/dashboard">← Umfragen</a>
+    <h1>{{ survey.title }}</h1>
+    <div class="survey-meta">
+      <span class="chip chip-{{ survey.status.value }}">{{ status_labels[survey.status.value] }}</span>
+      {% if response_count is defined and response_count is not none %}
+        <span>{{ response_count }} Antworten</span>
+      {% endif %}
+      <span>{{ survey.slots | length }} Zeitfenster</span>
+      {% if survey.updated_at %}
+        <span>bearbeitet {{ survey.updated_at.strftime('%d.%m.%Y %H:%M') }} UTC</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if head_actions %}<div class="button-row">{{ head_actions }}</div>{% endif %}
+</div>
+
+<nav class="tabs">
+  <a class="tab" href="/surveys/{{ survey.id }}/edit"
+     {% if active == 'edit' %}aria-current="page"{% endif %}>Editor</a>
+  <a class="tab" href="/surveys/{{ survey.id }}/distribute"
+     {% if active == 'distribute' %}aria-current="page"{% endif %}>Veröffentlichen</a>
+  <a class="tab" href="/surveys/{{ survey.id }}/report"
+     {% if active == 'report' %}aria-current="page"{% endif %}>Auswertung</a>
+  <a class="tab" href="/surveys/{{ survey.id }}/data"
+     {% if active == 'data' %}aria-current="page"{% endif %}>Daten &amp; Löschung</a>
+</nav>

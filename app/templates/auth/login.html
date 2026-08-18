@@ -2,15 +2,17 @@
 {% block title %}Anmelden — HGSFP Umfragen{% endblock %}
 
 {% block content %}
-<div style="max-width: 380px; margin: 6vh auto;">
+<div class="login">
+  <span class="brand">HGSFP Umfragen</span>
   <h1>Anmelden</h1>
   <p class="lede">Der Editor-Bereich ist geschützt. Die Umfrage selbst bleibt öffentlich zugänglich.</p>
+  <hr class="hr">
 
   {% if error %}
-    <div class="notice notice-error" style="margin-top: 16px">{{ error }}</div>
+    <div class="notice notice-error">{{ error }}</div>
   {% endif %}
 
-  <form method="post" action="/login" class="card" style="margin-top: 16px">
+  <form method="post" action="/login">
     <input type="hidden" name="next" value="{{ next_url }}">
     <div class="field">
       <label for="username">Benutzername</label>
@@ -20,7 +22,7 @@
       <label for="password">Passwort</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required>
     </div>
-    <button type="submit">Anmelden</button>
+    <button type="submit" class="button-block">Anmelden</button>
   </form>
 </div>
 {% endblock %}

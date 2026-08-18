@@ -2,70 +2,92 @@
 {% block title %}Daten — {{ survey.title }}{% endblock %}
 
 {% block content %}
-<div class="page-head">
+{% set head_actions %}
+  <a class="button button-secondary" href="/surveys/{{ survey.id }}/export.json">
+    Rohdaten exportieren (JSON)
+  </a>
+{% endset %}
+{% with active = 'data' %}{% include "_survey_head.html" %}{% endwith %}
+
+<div style="margin-top: 32px">
+  {% if imported %}
+    <div class="notice notice-ok"><p>{{ imported }} Antworten importiert.</p></div>
+  {% endif %}
+  {% if deleted %}
+    <div class="notice notice-ok"><p>Alle Antworten wurden gelöscht.</p></div>
+  {% endif %}
+  {% if error %}
+    <div class="notice notice-error"><p>{{ error }}</p></div>
+  {% endif %}
+</div>
+
+<div class="section">
   <div>
-    <h1>Daten &amp; Löschung</h1>
-    <p class="lede">{{ survey.title }}</p>
+    <h2>Bestand</h2>
+    <p class="section-note">
+      Der Export nutzt dasselbe Format wie das bisherige Analyse-Skript und lässt sich dort
+      weiterverwenden.
+    </p>
   </div>
-  <div class="button-row">
-    <a class="button button-secondary" href="/surveys/{{ survey.id }}/edit">Bearbeiten</a>
-    <a class="button button-secondary" href="/surveys/{{ survey.id }}/report">Auswertung</a>
-  </div>
-</div>
-
-{% if imported %}
-  <div class="notice notice-ok">{{ imported }} Antworten importiert.</div>
-{% endif %}
-{% if deleted %}
-  <div class="notice notice-ok">Alle Antworten wurden gelöscht.</div>
-{% endif %}
-{% if error %}
-  <div class="notice notice-error">{{ error }}</div>
-{% endif %}
-
-<div class="card">
-  <h2>Bestand</h2>
-  <p>Gespeicherte Antworten: <strong>{{ response_count }}</strong></p>
-  <div class="button-row">
-    <a class="button button-secondary" href="/surveys/{{ survey.id }}/export.json">
-      Rohdaten exportieren (JSON)
-    </a>
-  </div>
-  <p class="small muted" style="margin-top: 10px">
-    Der Export nutzt dasselbe Format wie das bisherige Analyse-Skript
-    (<code>{"ResultCount": …, "Data": […]}</code>) und lässt sich dort weiterverwenden.
-  </p>
-</div>
-
-<div class="card">
-  <h2>Frühere Ergebnisse importieren</h2>
-  <p class="small muted" style="margin-top: -6px">
-    Ergebnisdatei einer früheren Umfrage einlesen, um sie im Dashboard auszuwerten.
-    Zeitstempel und Instanz-IDs werden dabei verworfen.
-  </p>
-  <form method="post" action="/surveys/{{ survey.id }}/import" enctype="multipart/form-data">
-    <div class="field">
-      <label for="file">JSON-Datei</label>
-      <input type="file" id="file" name="file" accept="application/json,.json" required>
+  <div>
+    <div class="stat" style="padding: 0">
+      <div class="stat-value">{{ response_count }}</div>
+      <div class="stat-label">Gespeicherte Antworten</div>
     </div>
-    <button type="submit" class="button-secondary">Importieren</button>
-  </form>
+  </div>
 </div>
 
-<div class="card">
-  <h2>Löschen</h2>
-  <p class="small muted" style="margin-top: -6px">
-    Recht auf Löschung nach DSGVO. Beide Aktionen sind nicht rückgängig zu machen.
-  </p>
-  <div class="button-row">
-    <form method="post" action="/surveys/{{ survey.id }}/responses/delete"
-          onsubmit="return confirm('{{ response_count }} Antworten unwiderruflich löschen? Die Umfrage selbst bleibt bestehen.')">
-      <button type="submit" class="button-danger">Nur Antworten löschen ({{ response_count }})</button>
+<div class="section">
+  <div>
+    <h2>Frühere Ergebnisse importieren</h2>
+    <p class="section-note">
+      Ergebnisdatei einer früheren Umfrage einlesen, um sie im Dashboard auszuwerten.
+      Zeitstempel und Instanz-IDs werden dabei verworfen.
+    </p>
+  </div>
+  <div>
+    <form method="post" action="/surveys/{{ survey.id }}/import" enctype="multipart/form-data">
+      <div class="field-row" style="grid-template-columns: 1fr auto">
+        <div class="field">
+          <label for="file">JSON-Datei</label>
+          <input type="file" id="file" name="file" accept="application/json,.json" required>
+        </div>
+        <button type="submit" class="button-secondary">Importieren</button>
+      </div>
     </form>
-    <form method="post" action="/surveys/{{ survey.id }}/delete"
-          onsubmit="return confirm('Umfrage „{{ survey.title }}“ mit allen {{ response_count }} Antworten und Auswertungen unwiderruflich löschen?')">
-      <button type="submit" class="button-danger">Umfrage vollständig löschen</button>
-    </form>
+  </div>
+</div>
+
+<div class="section">
+  <div>
+    <h2>Löschen</h2>
+    <p class="section-note">
+      Recht auf Löschung nach DSGVO. Beide Aktionen sind nicht rückgängig zu machen.
+    </p>
+  </div>
+  <div class="danger-zone">
+    <div class="action-row">
+      <div>
+        <div class="action-title">Nur Antworten löschen</div>
+        <div class="action-note">
+          {{ response_count }} Antworten werden entfernt, die Umfrage selbst bleibt bestehen.
+        </div>
+      </div>
+      <form method="post" action="/surveys/{{ survey.id }}/responses/delete"
+            onsubmit="return confirm('{{ response_count }} Antworten unwiderruflich löschen? Die Umfrage selbst bleibt bestehen.')">
+        <button type="submit" class="button-danger">Antworten löschen</button>
+      </form>
+    </div>
+    <div class="action-row">
+      <div>
+        <div class="action-title">Umfrage vollständig löschen</div>
+        <div class="action-note">Umfrage, alle Antworten und Auswertungen werden entfernt.</div>
+      </div>
+      <form method="post" action="/surveys/{{ survey.id }}/delete"
+            onsubmit="return confirm('Umfrage „{{ survey.title }}“ mit allen {{ response_count }} Antworten und Auswertungen unwiderruflich löschen?')">
+        <button type="submit" class="button-danger">Umfrage löschen</button>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}

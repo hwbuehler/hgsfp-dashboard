@@ -100,6 +100,19 @@ def segment_by_semantic_similarity(
     return segments
 
 
+def _medoid(members: list[str], vectors) -> str:
+    """The member closest to the group's centre, used as its label.
+
+    Taking the first member instead would make the headline depend on the order
+    responses happen to arrive in.
+    """
+    if len(members) == 1:
+        return members[0]
+    centre = vectors.mean(axis=0)
+    centre = centre / (np.linalg.norm(centre) or 1.0)
+    return members[int(np.argmax(vectors @ centre))]
+
+
 def cluster_comments(
     corpus: list[str],
     use_semantic_split: bool = False,
@@ -111,11 +124,19 @@ def cluster_comments(
     ``use_semantic_split`` is for topic suggestions, where a comma may separate
     two distinct topics.  Leave it off for organisation comments, where commas
     are ordinary punctuation.
+
+    ``distance_threshold`` is a *cosine* distance, so 0.45 means "merge while
+    average similarity stays at or above 0.55".  Callers pass different values
+    for prose and for keyword lists; see the settings for why.
     """
     if split_similarity_threshold is None:
         split_similarity_threshold = settings.topic_split_similarity_threshold
     if distance_threshold is None:
-        distance_threshold = settings.cluster_distance_threshold
+        distance_threshold = (
+            settings.topic_cluster_distance
+            if use_semantic_split
+            else settings.comment_cluster_distance
+        )
 
     prepared: list[str] = []
     for comment in corpus:
@@ -140,20 +161,33 @@ def cluster_comments(
 
     from sklearn.cluster import AgglomerativeClustering
 
-    embeddings = get_model().encode(prepared)
-    model = AgglomerativeClustering(n_clusters=None, distance_threshold=distance_threshold)
+    embeddings = get_model().encode(prepared, convert_to_numpy=True)
+
+    # cosine + average, not scikit-learn's euclidean + ward default. The model
+    # emits L2-normalised vectors, so a euclidean threshold of t corresponds to
+    # a cosine similarity of 1 - t²/2 — the old default of 0.5 therefore demanded
+    # 0.875 similarity, which no two real comments in the sample data reach. The
+    # clustering could not merge anything, whatever the input.
+    model = AgglomerativeClustering(
+        n_clusters=None,
+        distance_threshold=distance_threshold,
+        metric="cosine",
+        linkage="average",
+    )
     model.fit(embeddings)
 
-    clusters: dict[int, list[str]] = {}
+    clusters: dict[int, list[int]] = {}
     for index, label in enumerate(model.labels_):
-        clusters.setdefault(int(label), []).append(prepared[index])
+        clusters.setdefault(int(label), []).append(index)
 
     clustered: list[str] = []
     grouped: list[str] = []
     # Largest clusters first — the report reads better when the most common
     # feedback is at the top.
-    for members in sorted(clusters.values(), key=len, reverse=True):
-        clustered.append(f"{members[0]} (x{len(members)})")
+    for indices in sorted(clusters.values(), key=len, reverse=True):
+        members = [prepared[i] for i in indices]
+        label = _medoid(members, embeddings[indices])
+        clustered.append(f"{label} (x{len(members)})")
         grouped.extend(members)
 
     return ClusteredComments(raw=grouped, clustered=clustered)
