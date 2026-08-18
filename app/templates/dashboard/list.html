@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Umfragen — HGSFP{% endblock %}
+
+{% set status_labels = {'draft': 'Entwurf', 'published': 'Veröffentlicht', 'closed': 'Geschlossen'} %}
+
+{% macro when(value) %}
+  {%- if value %}{{ value.strftime('%d.%m.%Y %H:%M') }}{% else %}<span class="muted">—</span>{% endif -%}
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Umfragen</h1>
+    <p class="lede">Anlegen, bearbeiten, veröffentlichen und auswerten.</p>
+  </div>
+</div>
+
+{% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}
+{% if created %}
+  <div class="notice notice-ok">
+    Umfrage aus der Datei angelegt: {{ created }} Antworten importiert,
+    Auswahllisten aus den Daten übernommen.
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2>Neue Umfrage anlegen</h2>
+  {% if templates_available %}
+    <form method="post" action="/surveys">
+      <div class="field-row">
+        <div>
+          <label for="title">Titel <span class="hint">— sehen die Teilnehmer:innen</span></label>
+          <input type="text" id="title" name="title" required
+                 placeholder="z. B. Questionnaire for the 57th Heidelberg Physics Graduate Days">
+        </div>
+        <div>
+          <label for="template_id">Vorlage</label>
+          <select id="template_id" name="template_id">
+            {% for template in templates_available %}
+              <option value="{{ template.id }}">{{ template.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit">Anlegen</button>
+      </div>
+    </form>
+    <p class="small muted" style="margin: 10px 0 0">
+      Zeitfenster und Auswahllisten werden aus der Vorlage übernommen und lassen sich
+      anschließend im Editor anpassen.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid var(--rule); margin: 20px 0">
+
+    <h2>… oder aus einer früheren Ergebnisdatei</h2>
+    <p class="small muted" style="margin-top: -6px">
+      Legt die Umfrage an, liest die Antworten ein und übernimmt die Vorlesungen direkt aus der
+      Datei — der Editor ist damit schon gefüllt und die Auswertung sofort möglich.
+    </p>
+    <form method="post" action="/surveys/from-file" enctype="multipart/form-data">
+      <div class="field-row">
+        <div>
+          <label for="file_title">Titel</label>
+          <input type="text" id="file_title" name="title" required
+                 placeholder="z. B. 56th Graduate Days (Archiv)">
+        </div>
+        <div>
+          <label for="results_file">Ergebnisdatei (JSON)</label>
+          <input type="file" id="results_file" name="file" accept="application/json,.json" required>
+        </div>
+        <button type="submit" class="button-secondary">Anlegen &amp; importieren</button>
+      </div>
+      <input type="hidden" name="template_id" value="{{ templates_available[0].id }}">
+    </form>
+  {% else %}
+    <div class="notice notice-error" style="margin: 0">
+      Es ist noch keine Vorlage hinterlegt. Einmalig ausführen:
+      <code>python scripts/bootstrap_template.py</code>
+    </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Bestehende Umfragen</h2>
+  {% if surveys %}
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Titel</th>
+          <th>Status</th>
+          <th class="numeric">Antworten</th>
+          <th>Erstellt</th>
+          <th>Zuletzt bearbeitet</th>
+          <th>Veröffentlicht</th>
+          <th>Geschlossen</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for survey in surveys %}
+          <tr>
+            <td><a href="/surveys/{{ survey.id }}/edit"><strong>{{ survey.title }}</strong></a></td>
+            <td>
+              <span class="chip chip-{{ survey.status.value }}">
+                {{ status_labels[survey.status.value] }}
+              </span>
+            </td>
+            <td class="numeric">{{ counts.get(survey.id, 0) }}</td>
+            <td class="when">{{ when(survey.created_at) }}</td>
+            <td class="when">{{ when(survey.updated_at) }}</td>
+            <td class="when">{{ when(survey.published_at) }}</td>
+            <td class="when">{{ when(survey.closed_at) }}</td>
+            <td>
+              <div class="button-row">
+                <a class="button button-secondary" href="/surveys/{{ survey.id }}/edit">Bearbeiten</a>
+                <a class="button button-secondary" href="/surveys/{{ survey.id }}/distribute">Veröffentlichen</a>
+                <a class="button button-secondary" href="/surveys/{{ survey.id }}/report">Auswertung</a>
+                <a class="button button-secondary" href="/surveys/{{ survey.id }}/data">Daten</a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="small muted" style="margin: 12px 0 0">Zeiten in UTC.</p>
+  {% else %}
+    <p class="muted">Noch keine Umfrage angelegt.</p>
+  {% endif %}
+</div>
+{% endblock %}

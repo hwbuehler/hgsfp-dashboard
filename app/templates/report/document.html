@@ -1,0 +1,102 @@
+{# The report itself. Rendered standalone for the PDF export and embedded in the
+   dashboard for the preview, so both come from this one file. #}
+{% import "report/_free_text.html" as free_text %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ document_title }}</title>
+  <link rel="stylesheet" href="{{ css_href }}">
+</head>
+<body>
+{% if screen_actions %}
+  {# Screen-only: the same @page rules drive the browser's print dialogue, so
+     "Save as PDF" from here produces the layout the server-side export produces. #}
+  <div class="screen-actions">
+    <a href="{{ screen_actions.pdf_url }}">Als PDF herunterladen</a>
+    <button type="button" onclick="window.print()">Drucken / Als PDF speichern</button>
+  </div>
+{% endif %}
+<div class="report">
+  {% for section in sections %}
+    {% with show_comments = section.scope.startswith('lecture-') %}
+      {% include "report/_section.html" %}
+    {% endwith %}
+  {% endfor %}
+
+  {% if include_all_comments and context.comment_groups %}
+    <section class="report-section">
+      <header class="section-head">
+        <h1>Lecture Comments</h1>
+        <p class="subtitle">Every free-text comment, grouped by slot and lecture</p>
+        <p class="counts">{{ context.total_lecture_comments }} comment{{ '' if context.total_lecture_comments == 1 else 's' }}</p>
+      </header>
+
+      {% for group in context.comment_groups %}
+        <h2 class="block-title" style="margin-top: 14px">{{ group.title }}</h2>
+        {% for lecture in group.lectures %}
+          <div class="comment-block">
+            <p class="comment-block-title">
+              {{ lecture.title }}
+              {% if lecture.subtitle %}<span class="comment-count">— {{ lecture.subtitle }}</span>{% endif %}
+            </p>
+            {% if lecture.comments %}
+              <ul class="comment-list">
+                {% for comment in lecture.comments %}<li>{{ comment }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              <p class="empty-note">No comments submitted for this lecture.</p>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if include_free_text %}
+    {% if context.clustering_available %}
+      {{ free_text.block("Organisation Feedback", context.organization, cluster_note) }}
+      {{ free_text.block("Topic Suggestions", context.topics, cluster_note) }}
+    {% else %}
+      {{ free_text.block("Organisation Feedback", context.organization, "") }}
+      {{ free_text.block("Topic Suggestions", context.topics, "") }}
+    {% endif %}
+  {% endif %}
+
+  {% if include_summary and context.summary_rows %}
+    <section class="report-section">
+      <header class="section-head">
+        <h1>Statistics Overview</h1>
+        <p class="subtitle">Mean ± standard deviation per question</p>
+      </header>
+      <table class="summary-table is-long">
+        <thead>
+          <tr>
+            <th scope="col">Lecture</th>
+            <th scope="col" class="numeric">n</th>
+            {% for title in context.question_titles %}
+              <th scope="col" class="numeric">Q{{ loop.index }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in context.summary_rows %}
+            <tr{% if row.scope.startswith('slot-') or row.scope == 'overall' %} class="row-aggregate"{% endif %}>
+              <th scope="row">{{ row.title }}</th>
+              <td class="numeric">{{ row.n }}</td>
+              {% for value in row['values'] %}<td class="numeric">{{ value }}</td>{% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="method-note">
+        {% for title in context.question_titles %}Q{{ loop.index }}: {{ title }}{{ " · " if not loop.last }}{% endfor %}
+      </p>
+      <p class="method-note">
+        Statistics are omitted where five or fewer people answered a question.
+      </p>
+    </section>
+  {% endif %}
+</div>
+</body>
+</html>

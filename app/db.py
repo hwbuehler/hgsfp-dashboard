@@ -1,0 +1,51 @@
+"""Database engine and session handling.
+
+SQLite is run in WAL mode so that participants submitting responses concurrently
+do not block each other.  Readers never block the single writer, which is what
+matters for a survey that a few hundred people fill in at the same time.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.config import settings
+
+
+def _build_engine() -> Engine:
+    settings.database_file.parent.mkdir(parents=True, exist_ok=True)
+    return create_engine(
+        settings.database_url,
+        # FastAPI runs sync endpoints in a threadpool, so a connection may be
+        # handed to a different thread than the one that created it.
+        connect_args={"check_same_thread": False},
+        future=True,
+    )
+
+
+engine = _build_engine()
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    # Wait instead of raising "database is locked" when the writer is busy.
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
+
+def get_session() -> Iterator[Session]:
+    """FastAPI dependency yielding a request-scoped session."""
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()

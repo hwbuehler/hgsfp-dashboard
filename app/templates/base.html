@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}HGSFP Umfrage-Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+</head>
+<body>
+  {% if user %}
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a href="/dashboard" class="brand">HGSFP Umfragen</a>
+        <nav>
+          <span class="who">{{ user.display_name or user.username }}</span>
+          <form method="post" action="/logout">
+            <button type="submit" class="button-secondary">Abmelden</button>
+          </form>
+        </nav>
+      </div>
+    </header>
+  {% endif %}
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

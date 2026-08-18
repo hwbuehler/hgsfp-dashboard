@@ -1,0 +1,93 @@
+{# One report page: heading, legend, six Likert bars. Used by preview and PDF. #}
+<section class="report-section">
+  <header class="section-head">
+    <h1>{{ section.title }}</h1>
+    {% if section.subtitle %}<p class="subtitle">{{ section.subtitle }}</p>{% endif %}
+    <p class="counts">
+      {{ section.response_count }} response{{ '' if section.response_count == 1 else 's' }}
+      {%- if section.dna_count %}
+        · {{ section.dna_count }} did not attend
+      {%- endif %}
+    </p>
+  </header>
+
+  {% if section.has_data %}
+    <ul class="legend">
+      {% for item in section.legend_for('interesting') %}
+        <li><span class="swatch" style="background: {{ item.color }}"></span>{{ item.label }}</li>
+      {% endfor %}
+    </ul>
+
+    {% for stat in section.stats %}
+      <div class="question">
+        <div class="question-head">
+          <p class="question-title">{{ loop.index }}. {{ stat.title }}</p>
+          {% if stat.has_statistics %}
+            <span class="question-stat">{{ stat.formatted() }} (n={{ stat.n }})</span>
+          {% else %}
+            <span class="question-stat is-missing">too few responses for statistics (n={{ stat.n }})</span>
+          {% endif %}
+        </div>
+        {% if stat.question == 'level' %}
+          <ul class="legend">
+            {% for item in section.legend_for('level') %}
+              <li><span class="swatch" style="background: {{ item.color }}"></span>{{ item.label }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        {{ section.charts[stat.question] | safe }}
+      </div>
+    {% endfor %}
+
+    {# The distribution table is the relief for the low-contrast palette steps:
+       every value stays readable without relying on colour.
+       Headers are numeric because question 6 uses a different scale from the
+       other five — naming one scale in the header would mislabel that row. #}
+    <table class="summary-table">
+      <caption>Response counts per rating</caption>
+      <thead>
+        <tr>
+          <th scope="col">Question</th>
+          {% for value in [1, 2, 3, 4, 5] %}
+            <th scope="col" class="numeric">{{ value }}</th>
+          {% endfor %}
+          <th scope="col" class="numeric">Mean ± SD</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for stat in section.stats %}
+          <tr>
+            <th scope="row">{{ loop.index }}. {{ stat.title }}</th>
+            {% for count in stat.counts %}
+              <td class="numeric">{{ count }}</td>
+            {% endfor %}
+            <td class="numeric">{{ stat.formatted() }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="method-note">
+      Questions 1–5: 1 = {{ section.legend_for('interesting')[0].label }} …
+      5 = {{ section.legend_for('interesting')[4].label }}.
+      Question 6: 1 = {{ section.legend_for('level')[0].label }} …
+      5 = {{ section.legend_for('level')[4].label }}.
+    </p>
+
+    {# Always shown for a lecture, even when empty: silence here is
+       indistinguishable from a missing feature. #}
+    {% if show_comments %}
+      <div style="margin-top: 16px">
+        <h2 class="block-title">Comments <span class="comment-count">({{ section.comments | length }})</span></h2>
+        {% if section.comments %}
+          <ul class="comment-list">
+            {% for comment in section.comments %}<li>{{ comment }}</li>{% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty-note">No comments were submitted for this lecture.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="empty-note">No responses were recorded for this lecture.</p>
+  {% endif %}
+</section>

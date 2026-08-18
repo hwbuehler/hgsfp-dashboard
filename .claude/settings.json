@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($sp='c:\\\\Users\\\\hagen\\\\Documents\\\\git-repos\\\\hgsfp-survey-tool\\\\Lib\\\\site-packages'; Get-ChildItem $sp -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'dist-info$' } | Select-Object -ExpandProperty Name | Sort-Object)",
+      "PowerShell($r='c:\\\\Users\\\\hagen\\\\Documents\\\\git-repos\\\\hgsfp-dashboard'; & \"$r\\\\.venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hagen\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hagen-Documents-git-repos-hgsfp-dashboard\\\\387758cc-3537-4bff-8c43-c63cad8bb0c6\\\\scratchpad\\\\smoke_analysis.py\")"
+    ]
+  }
+}

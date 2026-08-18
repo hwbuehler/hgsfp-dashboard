@@ -1,0 +1,28 @@
+{# Clustered and raw free-text pages (organisation comments, topic suggestions). #}
+{% macro block(title, comments, note) %}
+  <section class="report-section">
+    <header class="section-head">
+      <h1>{{ title }}</h1>
+      <p class="counts">{{ comments.raw | length }} response{{ '' if comments.raw | length == 1 else 's' }}</p>
+    </header>
+
+    {% if comments.clustered %}
+      <h2 class="block-title">Grouped by similarity</h2>
+      <p class="method-note">{{ note }}</p>
+      <ul class="comment-list">
+        {% for entry in comments.clustered %}<li>{{ entry }}</li>{% endfor %}
+      </ul>
+
+      <h2 class="block-title" style="margin-top: 18px">All responses</h2>
+      <ul class="comment-list is-compact two-column">
+        {% for entry in comments.raw %}<li>{{ entry }}</li>{% endfor %}
+      </ul>
+    {% elif comments.raw %}
+      <ul class="comment-list">
+        {% for entry in comments.raw %}<li>{{ entry }}</li>{% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-note">Nothing was submitted here.</p>
+    {% endif %}
+  </section>
+{% endmacro %}

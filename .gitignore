@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Runtime data — contains survey responses, never commit
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Sentence-transformer model (~90 MB), fetched via scripts/fetch_model.py
+models/
+
+# Output of scripts/verify_pdf.py
+build/
+
+# Local configuration
+.env
+
+# Editor
+.vscode/
+.idea/

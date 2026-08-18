@@ -1,0 +1,569 @@
+{
+  "title": {
+    "default": "Questionnaire for the 56th Heidelberg Physics Graduate Days",
+    "de": "Heidelberg Physics Graduate Days - Fragebogen"
+  },
+  "logo": "https://hgsfp.uni-heidelberg.de/HGSFP_MIT_Text_zweizeilig.svg",
+  "logoWidth": "180px",
+  "logoHeight": "180px",
+  "logoFit": "fill",
+  "completedHtml": {
+    "default": "Thank you for completing the survey!You can safely close this window.",
+    "de": "Vielen Dank für Ihre Rückmeldung! Sie können diese Webseite nun schließen."
+  },
+  "pages": [
+    {
+      "name": "ml",
+      "title": {
+        "default": "Morning Lecture",
+        "de": "Vormittagskurs"
+      },
+      "elements": [
+        {
+          "type": "dropdown",
+          "name": "ml_title",
+          "title": {
+            "default": "Lecture Title",
+            "de": "Kurstitel"
+          },
+          "isRequired": true,
+          "choices": [
+            {
+              "value": "Peacock",
+              "text": "Evolution of the Dark Universe"
+            },
+            {
+              "value": "Groß",
+              "text": "Quantum Lego with Ultracold Atoms"
+            },
+            {
+              "value": "Blekman",
+              "text": "The Higgs Boson of the Future"
+            },
+            {
+              "value": "Erdmenger",
+              "text": "Holographics Dualities"
+            },
+            {
+              "value": "Ollefs",
+              "text": "Magnetic Materials for Green Energy: From Fundamental Understanding to Real-World Applications"
+            },
+            {
+              "value": "DnA",
+              "text": "did not attend"
+            }
+          ],
+          "choicesOrder": "asc",
+          "noneText": "did not attend"
+        },
+        {
+          "type": "rating",
+          "name": "ml_interesting",
+          "visibleIf": "{ml_title} != 'DnA'",
+          "title": {
+            "default": "The content was interesting",
+            "de": "Der Inhalt war interessant"
+          },
+          "isRequired": true,
+          "requiredIf": "{ml_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "ml_new",
+          "visibleIf": "{ml_title} != 'DnA'",
+          "title": {
+            "default": "The content was new to me",
+            "de": "Der Inhalt war neu für mich"
+          },
+          "isRequired": true,
+          "requiredIf": "{ml_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "ml_expected",
+          "visibleIf": "{ml_title} != 'DnA'",
+          "title": {
+            "default": "The content was what I had expected from the title and abstract",
+            "de": "Der Inhalt entsprach den Erwartungen aus dem Titel und Abstract"
+          },
+          "isRequired": true,
+          "requiredIf": "{ml_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "ml_exciting",
+          "visibleIf": "{ml_title} != 'DnA'",
+          "title": {
+            "default": "The way it was presented was exciting",
+            "de": "Die Präsentation war ansprechend gestaltet"
+          },
+          "isRequired": true,
+          "requiredIf": "{ml_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          }
+        },
+        {
+          "type": "rating",
+          "name": "ml_structure",
+          "visibleIf": "{ml_title} != 'DnA'",
+          "title": {
+            "default": "The presentation had a clear structure",
+            "de": "Die Präsentation war klar strukturiert"
+          },
+          "isRequired": true,
+          "requiredIf": "{ml_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          }
+        },
+        {
+          "type": "rating",
+          "name": "ml_level",
+          "visibleIf": "{ml_title} != 'DnA'",
+          "title": {
+            "default": "The level was",
+            "de": "Das Niveau war"
+          },
+          "requiredIf": "{ml_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "very difficult",
+            "de": "sehr schwierig"
+          },
+          "maxRateDescription": {
+            "default": "very easy",
+            "de": "sehr einfach"
+          },
+          "displayMode": "buttons"
+        }
+      ]
+    },
+    {
+      "name": "al",
+      "title": {
+        "default": "Afternoon Lecture",
+        "de": "Nachmittagskurs"
+      },
+      "elements": [
+        {
+          "type": "dropdown",
+          "name": "al_title",
+          "title": {
+            "default": "Lecture Title",
+            "de": "Kurstitel"
+          },
+          "isRequired": true,
+          "choices": [
+            {
+              "value": "Wefing",
+              "text": "Unravelling the Secrets of the Oceans Using Isotopic Tracers"
+            },
+            {
+              "value": "Weir",
+              "text": "Primordial Sources of Gravitational Waves: What Can Simulations Teach Us"
+            },
+            {
+              "value": "Warmer",
+              "text": "Playing with Starfire: The Art and Science of Fusion"
+            },
+            {
+              "value": "Kierfeld",
+              "text": "Soft Matter and Biophysics: Hard Spheres, Polymers, and Soft Rheology with Novel Simulation Techniques"
+            },
+            {
+              "value": "Held",
+              "text": "Living with Ghosts: The Physics of Opposite-Sign Kinetic Terms"
+            },
+            {
+              "value": "DnA",
+              "text": "did not attend"
+            }
+          ],
+          "choicesOrder": "asc",
+          "noneText": "None"
+        },
+        {
+          "type": "rating",
+          "name": "al_interesting",
+          "visibleIf": "{al_title} != 'DnA'",
+          "title": {
+            "default": "The content was interesting",
+            "de": "Der Inhalt war interessant"
+          },
+          "isRequired": true,
+          "requiredIf": "{al_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "al_new",
+          "visibleIf": "{al_title} != 'DnA'",
+          "title": {
+            "default": "The content was new to me",
+            "de": "Der Inhalt war neu für mich"
+          },
+          "isRequired": true,
+          "requiredIf": "{al_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "al_expected",
+          "visibleIf": "{al_title} != 'DnA'",
+          "title": {
+            "default": "The content was what I had expected from the title and abstract",
+            "de": "Der Inhalt entsprach den Erwartungen aus dem Titel und Abstract"
+          },
+          "isRequired": true,
+          "requiredIf": "{al_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "al_exciting",
+          "visibleIf": "{al_title} != 'DnA'",
+          "title": {
+            "default": "The way it was presented was exciting",
+            "de": "Die Präsentation war ansprechend gestaltet"
+          },
+          "isRequired": true,
+          "requiredIf": "{al_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "al_structure",
+          "visibleIf": "{al_title} != 'DnA'",
+          "title": {
+            "default": "The presentation had a clear structure",
+            "de": "Die Präsentation war klar strukturiert"
+          },
+          "isRequired": true,
+          "requiredIf": "{al_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "al_level",
+          "visibleIf": "{al_title} != 'DnA'",
+          "title": {
+            "default": "The level was",
+            "de": "Das Niveau war"
+          },
+          "isRequired": true,
+          "requiredIf": "{al_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "very difficult",
+            "de": "sehr schwierig"
+          },
+          "maxRateDescription": {
+            "default": "very easy",
+            "de": "sehr einfach"
+          },
+          "displayMode": "buttons"
+        }
+      ]
+    },
+    {
+      "name": "il",
+      "title": {
+        "default": "Industry Lecture",
+        "de": "Industrie-Vorlesung"
+      },
+      "elements": [
+        {
+          "type": "dropdown",
+          "name": "il_title",
+          "title": {
+            "default": "Lecture Title",
+            "de": "Kurstitel"
+          },
+          "isRequired": true,
+          "choices": [
+            {
+              "value": "Pauly",
+              "text": "Powering Change: Renewable Energies and Dynamic Consumption"
+            },
+            {
+              "value": "DnA",
+              "text": "did not attend"
+            }
+          ]
+        },
+        {
+          "type": "rating",
+          "name": "il_interesting",
+          "visibleIf": "{il_title} != 'DnA'",
+          "title": {
+            "default": "The content was interesting",
+            "de": "Der Inhalt war interessant"
+          },
+          "isRequired": true,
+          "requiredIf": "{il_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "il_new",
+          "visibleIf": "{il_title} != 'DnA'",
+          "title": {
+            "default": "The content was new to me",
+            "de": "Der Inhalt war neu für mich"
+          },
+          "isRequired": true,
+          "requiredIf": "{il_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "il_expected",
+          "visibleIf": "{il_title} != 'DnA'",
+          "title": {
+            "default": "The content was what I had expected from the title and abstract",
+            "de": "Der Inhalt entsprach den Erwartungen aus dem Titel und Abstract"
+          },
+          "isRequired": true,
+          "requiredIf": "{il_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "il_exciting",
+          "visibleIf": "{il_title} != 'DnA'",
+          "title": {
+            "default": "The way it was presented was exciting",
+            "de": "Die Präsentation war ansprechend gestaltet"
+          },
+          "isRequired": true,
+          "requiredIf": "{il_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "il_structure",
+          "visibleIf": "{il_title} != 'DnA'",
+          "title": {
+            "default": "The presentation had a clear structure",
+            "de": "Die Präsentation war klar strukturiert"
+          },
+          "isRequired": true,
+          "requiredIf": "{il_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "strongly disagree",
+            "de": "stimme überhaupt nicht zu"
+          },
+          "maxRateDescription": {
+            "default": "strongly agree",
+            "de": "stimme voll zu"
+          },
+          "displayMode": "buttons"
+        },
+        {
+          "type": "rating",
+          "name": "il_level",
+          "visibleIf": "{il_title} != 'DnA'",
+          "title": {
+            "default": "The level was",
+            "de": "Das Niveau war"
+          },
+          "isRequired": true,
+          "requiredIf": "{il_title} != 'DnA'",
+          "minRateDescription": {
+            "default": "very difficult",
+            "de": "sehr schwierig"
+          },
+          "maxRateDescription": {
+            "default": "very easy",
+            "de": "sehr einfach"
+          },
+          "displayMode": "buttons"
+        }
+      ]
+    },
+    {
+      "name": "sugg",
+      "title": {
+        "default": "Suggestions for Improvements",
+        "de": "Verbesserungsvorschläge"
+      },
+      "elements": [
+        {
+          "type": "multipletext",
+          "name": "sugg_lectures",
+          "title": {
+            "default": "Suggestions for improvements concerning the lectures",
+            "de": "Verbesserungsvorschläge für die Kurse"
+          },
+          "description": {
+            "default": "Please separate different suggestions with a comma.",
+            "de": "Bitte trennen Sie verschiedene Vorschläge mit einem Komma."
+          },
+          "items": [
+            {
+              "name": "ml_comment",
+              "title": {
+                "default": "Morning Lecture",
+                "de": "Vormittagskurs"
+              }
+            },
+            {
+              "name": "al_comment",
+              "title": {
+                "default": "Afternoon Lecture",
+                "de": "Nachmittagskurs"
+              }
+            },
+            {
+              "name": "il_comment",
+              "title": {
+                "default": "Industry Lecture",
+                "de": "Industrie-Vorlesung"
+              }
+            }
+          ]
+        },
+        {
+          "type": "comment",
+          "name": "sugg_organization",
+          "title": {
+            "default": "Suggestions for improvements concerning the overall organization",
+            "de": "Vorschläge bezogen auf die allgemeine Organisation"
+          },
+          "description": {
+            "default": "Please separate different suggestions with a comma.",
+            "de": "Bitte trennen Sie verschiedene Vorschläge mit einem Komma."
+          }
+        },
+        {
+          "type": "text",
+          "name": "sugg_topics",
+          "title": {
+            "default": "The next graduate days should offer a course on the following topic(s):",
+            "de": "Themenvorschläge für die nächsten Graduiertentage"
+          },
+          "description": {
+            "default": "Please separate different topics with a comma.",
+            "de": "Bitte trennen Sie verschiedene Vorschläge mit einem Komma."
+          }
+        }
+      ]
+    }
+  ],
+  "navigationButtonsLocation": "topBottom",
+  "showQuestionNumbers": "onPage",
+  "showProgressBar": true,
+  "progressBarType": "questions",
+  "autoAdvanceEnabled": true,
+  "widthMode": "responsive",
+  "width": "7in",
+  "headerView": "advanced"
+}

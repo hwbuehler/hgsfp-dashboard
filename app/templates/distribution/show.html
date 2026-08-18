@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Veröffentlichen — {{ survey.title }}{% endblock %}
+
+{% set status_labels = {'draft': 'Entwurf', 'published': 'Veröffentlicht', 'closed': 'Geschlossen'} %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Umfrage veröffentlichen</h1>
+    <p class="lede">
+      {{ survey.title }} ·
+      <span class="chip chip-{{ survey.status.value }}">{{ status_labels[survey.status.value] }}</span>
+    </p>
+  </div>
+  <div class="button-row">
+    <a class="button button-secondary" href="/surveys/{{ survey.id }}/edit">Bearbeiten</a>
+    <a class="button button-secondary" href="/surveys/{{ survey.id }}/report">Auswertung</a>
+  </div>
+</div>
+
+{% if survey.status.value != 'published' %}
+  <div class="notice notice-error">
+    Die Umfrage ist nicht veröffentlicht — der Link zeigt Teilnehmer:innen aktuell einen Hinweis,
+    dass keine Antworten angenommen werden.
+    <div class="button-row" style="margin-top: 10px">
+      <form method="post" action="/surveys/{{ survey.id }}/publish">
+        <button type="submit">Jetzt veröffentlichen</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2>Link und QR-Code</h2>
+  <div class="share-grid">
+    <div style="flex: 1 1 340px">
+      <label for="share-url">Teilnahme-Link</label>
+      <div class="link-box" id="share-url">{{ url }}</div>
+      <div class="button-row" style="margin-top: 12px">
+        <button type="button" class="button-secondary" id="copy-button">Link kopieren</button>
+        <a class="button button-secondary" href="{{ url }}" target="_blank">Link öffnen</a>
+        <a class="button button-secondary" href="/surveys/{{ survey.id }}/qr.png" download>
+          QR-Code herunterladen
+        </a>
+      </div>
+      <p class="small muted" style="margin-top: 14px">
+        Der Link enthält ein zufälliges Kürzel und ist nicht erratbar. Er verlangt keine Anmeldung,
+        damit die Teilnahme anonym bleibt.
+      </p>
+    </div>
+    <div class="qr-panel">
+      <img src="/surveys/{{ survey.id }}/qr.png" alt="QR-Code für den Teilnahme-Link">
+      <p class="small muted" style="margin-top: 8px">Zum Projizieren im Hörsaal</p>
+    </div>
+  </div>
+</div>
+
+{% if survey.status.value == 'published' %}
+  <div class="card">
+    <h2>Beenden</h2>
+    <p class="small muted" style="margin-top: -6px">
+      Nach dem Schließen werden keine weiteren Antworten angenommen. Die bereits gesammelten
+      Antworten bleiben erhalten.
+    </p>
+    <div class="button-row">
+      <form method="post" action="/surveys/{{ survey.id }}/close">
+        <button type="submit" class="button-secondary">Umfrage schließen</button>
+      </form>
+      <form method="post" action="/surveys/{{ survey.id }}/unpublish">
+        <button type="submit" class="button-secondary">Depublizieren (zurück zu Entwurf)</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+<script>
+  document.getElementById("copy-button").addEventListener("click", function () {
+    var button = this;
+    navigator.clipboard.writeText({{ url | tojson }}).then(function () {
+      button.textContent = "Kopiert";
+      setTimeout(function () { button.textContent = "Link kopieren"; }, 1800);
+    });
+  });
+</script>
+{% endblock %}

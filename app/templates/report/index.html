@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Auswertung — {{ survey.title }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Auswertung</h1>
+    <p class="lede">{{ survey.title }} · {{ response_count }} Antworten</p>
+  </div>
+  <div class="button-row">
+    <a class="button button-secondary" href="/dashboard">Übersicht</a>
+    <a class="button button-secondary" href="/surveys/{{ survey.id }}/edit">Bearbeiten</a>
+  </div>
+</div>
+
+{% if created %}
+  <div class="notice notice-ok">
+    Umfrage angelegt und {{ created }} Antworten importiert. Die Vorlesungen wurden aus der Datei
+    übernommen — im <a href="/surveys/{{ survey.id }}/edit">Editor</a> lassen sich die Anzeigetitel
+    ergänzen. Jetzt „Analyse starten“.
+  </div>
+{% endif %}
+
+{% if is_stale %}
+  <div class="notice notice-error">
+    Die Umfrage wurde nach der letzten Analyse bearbeitet. Vorschau und PDF zeigen noch den
+    alten Stand — „Analyse neu berechnen“, um sie zu aktualisieren.
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2>Analyse</h2>
+  {% with survey_id = survey.id, reloaded = (context is not none) %}
+    {% include "report/_status.html" %}
+  {% endwith %}
+
+  <form method="post" action="/surveys/{{ survey.id }}/analysis" style="margin-top: 14px">
+    <button type="submit" {% if response_count == 0 %}disabled{% endif %}>
+      {% if context %}Analyse neu berechnen{% else %}Analyse starten{% endif %}
+    </button>
+    {% if response_count == 0 %}
+      <span class="small muted" style="margin-left: 10px">
+        Noch keine Antworten — unter „Daten“ lässt sich eine bestehende Ergebnisdatei importieren.
+      </span>
+    {% endif %}
+  </form>
+</div>
+
+{% if context %}
+  <div class="card">
+    <h2>Vorschau je Vorlesung</h2>
+    <p class="small muted" style="margin-top: -6px">
+      Die Vorschau zeigt exakt das Layout, das auch das PDF verwendet.
+    </p>
+    <div class="card-grid">
+      {% for section in context.sections %}
+        <a class="tile" href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">
+          <div class="tile-title">{{ section.title }}</div>
+          <div class="tile-meta">
+            {{ section.response_count }} Antworten
+            {%- if section.dna_count %} · {{ section.dna_count }} nicht teilgenommen{% endif %}
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Export</h2>
+    <div class="button-row">
+      <a class="button" href="/surveys/{{ survey.id }}/report/all" target="_blank">
+        Gesamt-Report ansehen
+      </a>
+      <a class="button button-secondary" href="/surveys/{{ survey.id }}/report/all/pdf">
+        Gesamt-Report als PDF
+      </a>
+      <a class="button button-secondary" href="/surveys/{{ survey.id }}/reports.zip">
+        Alle Einzel-PDFs als ZIP
+      </a>
+    </div>
+    <p class="small muted" style="margin-top: 12px">
+      Einzelne Vorlesungen: Vorschau öffnen und dort „als PDF“ anhängen, oder direkt
+      <code>/surveys/{{ survey.id }}/report/&lt;abschnitt&gt;/pdf</code> aufrufen.
+    </p>
+    {% if not context.clustering_available %}
+      <div class="notice notice-error" style="margin: 14px 0 0">
+        Kommentar-Clustering wurde übersprungen: {{ context.clustering_note }}
+        Die Kommentare erscheinen ungruppiert im Report.
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Einzel-PDFs</h2>
+    <table class="data">
+      <thead><tr><th>Abschnitt</th><th>Antworten</th><th></th></tr></thead>
+      <tbody>
+        {% for section in context.sections %}
+          <tr>
+            <td>{{ section.title }}</td>
+            <td>{{ section.response_count }}</td>
+            <td>
+              <div class="button-row">
+                <a class="button button-secondary"
+                   href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">Vorschau</a>
+                <a class="button button-secondary"
+                   href="/surveys/{{ survey.id }}/report/{{ section.scope }}/pdf">PDF</a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

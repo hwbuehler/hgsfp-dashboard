@@ -1,0 +1,37 @@
+{# Self-replacing fragment: while the job runs it re-requests itself every two
+   seconds; the finished version carries no hx-trigger, so polling stops. #}
+{% if run is none %}
+  <div id="analysis-status">
+    <p class="muted" style="margin: 0">Noch keine Analyse durchgeführt.</p>
+  </div>
+{% elif run.status.value in ('pending', 'running') %}
+  <div id="analysis-status"
+       hx-get="/surveys/{{ survey_id }}/analysis/status"
+       hx-trigger="every 2s"
+       hx-swap="outerHTML">
+    <div class="status-line">
+      <span class="spinner"></span>
+      <span>Analyse läuft — Kommentar-Clustering kann einige Sekunden dauern.</span>
+    </div>
+  </div>
+{% elif run.status.value == 'done' %}
+  <div id="analysis-status">
+    <p style="margin: 0">
+      ✓ Analyse abgeschlossen ({{ run.response_count }} Antworten).
+      {% if run.finished_at %}
+        <span class="small muted">Stand: {{ run.finished_at.strftime('%d.%m.%Y %H:%M') }} UTC</span>
+      {% endif %}
+    </p>
+    {% if not reloaded %}
+      <p class="small muted" style="margin: 6px 0 0">
+        <a href="/surveys/{{ survey_id }}/report">Seite neu laden</a>, um die Vorschau anzuzeigen.
+      </p>
+    {% endif %}
+  </div>
+{% else %}
+  <div id="analysis-status">
+    <div class="notice notice-error" style="margin: 0">
+      Die Analyse ist fehlgeschlagen: {{ run.error_message }}
+    </div>
+  </div>
+{% endif %}

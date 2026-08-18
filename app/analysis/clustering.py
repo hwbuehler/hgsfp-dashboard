@@ -1,0 +1,159 @@
+"""Group free-text comments by meaning.
+
+Ported from _comment_grouper / _segment_by_semantic_similarity in
+hgsfp-survey-tool/survey_analyzer.py, which in turn follows Tom Aarsen's
+agglomerative clustering example for sentence-transformers.
+
+The change that matters here is loading: the original built a SentenceTransformer
+in __init__, so merely constructing the analyzer pulled ~90 MB into memory.  The
+model is now loaded once per process, on first use, so the web app starts fast
+and never loads it at all unless somebody runs an analysis.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import threading
+from dataclasses import dataclass
+
+import numpy as np
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+_model = None
+_model_lock = threading.Lock()
+
+
+class ModelUnavailable(RuntimeError):
+    """Raised when the sentence-transformer model cannot be loaded."""
+
+
+def get_model():
+    """Load the sentence-transformer once and share it across requests."""
+    global _model
+    if _model is None:
+        with _model_lock:
+            if _model is None:
+                model_dir = settings.model_dir
+                if not model_dir.exists():
+                    raise ModelUnavailable(
+                        f"Model directory {model_dir} not found — "
+                        "run scripts/fetch_model.py first."
+                    )
+                from sentence_transformers import SentenceTransformer
+
+                logger.info("Loading sentence-transformer from %s", model_dir)
+                _model = SentenceTransformer(str(model_dir))
+    return _model
+
+
+@dataclass(frozen=True)
+class ClusteredComments:
+    """Both views the report needs: every comment, and one line per cluster."""
+
+    raw: list[str]
+    clustered: list[str]
+
+    def to_dict(self) -> dict:
+        return {"raw": self.raw, "clustered": self.clustered}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ClusteredComments":
+        return cls(raw=data.get("raw", []), clustered=data.get("clustered", []))
+
+
+def segment_by_semantic_similarity(
+    text: str | list[str], similarity_threshold: float = 0.0
+) -> list[str]:
+    """Split text into semantically distinct units.
+
+    Accepts a plain string (split on sentence boundaries) or an already-split
+    list, e.g. the comma-separated parts of a topic suggestion.  Adjacent parts
+    are merged when their cosine similarity reaches the threshold, so a comma
+    that joins one thought does not become two topics.
+    """
+    if isinstance(text, list):
+        sentences = [s.strip() for s in text if s.strip()]
+    else:
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+    if len(sentences) <= 1:
+        return sentences
+
+    embeddings = get_model().encode(sentences, convert_to_numpy=True)
+
+    segments: list[str] = []
+    current = sentences[0]
+    for i in range(1, len(sentences)):
+        similarity = np.dot(embeddings[i - 1], embeddings[i]) / (
+            np.linalg.norm(embeddings[i - 1]) * np.linalg.norm(embeddings[i])
+        )
+        if similarity < similarity_threshold:
+            segments.append(current)
+            current = sentences[i]
+        else:
+            current += " " + sentences[i]
+    segments.append(current)
+    return segments
+
+
+def cluster_comments(
+    corpus: list[str],
+    use_semantic_split: bool = False,
+    split_similarity_threshold: float | None = None,
+    distance_threshold: float | None = None,
+) -> ClusteredComments:
+    """Cluster comments and return the raw list alongside one line per cluster.
+
+    ``use_semantic_split`` is for topic suggestions, where a comma may separate
+    two distinct topics.  Leave it off for organisation comments, where commas
+    are ordinary punctuation.
+    """
+    if split_similarity_threshold is None:
+        split_similarity_threshold = settings.topic_split_similarity_threshold
+    if distance_threshold is None:
+        distance_threshold = settings.cluster_distance_threshold
+
+    prepared: list[str] = []
+    for comment in corpus:
+        if not isinstance(comment, str):
+            continue
+        if use_semantic_split:
+            parts = [p.strip() for p in comment.split(",") if p.strip()]
+            prepared.extend(
+                segment_by_semantic_similarity(
+                    parts, similarity_threshold=split_similarity_threshold
+                )
+            )
+        else:
+            stripped = comment.strip()
+            if stripped:
+                prepared.append(stripped)
+
+    if not prepared:
+        return ClusteredComments(raw=[], clustered=[])
+    if len(prepared) == 1:
+        return ClusteredComments(raw=prepared, clustered=[f"{prepared[0]} (x1)"])
+
+    from sklearn.cluster import AgglomerativeClustering
+
+    embeddings = get_model().encode(prepared)
+    model = AgglomerativeClustering(n_clusters=None, distance_threshold=distance_threshold)
+    model.fit(embeddings)
+
+    clusters: dict[int, list[str]] = {}
+    for index, label in enumerate(model.labels_):
+        clusters.setdefault(int(label), []).append(prepared[index])
+
+    clustered: list[str] = []
+    grouped: list[str] = []
+    # Largest clusters first — the report reads better when the most common
+    # feedback is at the top.
+    for members in sorted(clusters.values(), key=len, reverse=True):
+        clustered.append(f"{members[0]} (x{len(members)})")
+        grouped.extend(members)
+
+    return ClusteredComments(raw=grouped, clustered=clustered)

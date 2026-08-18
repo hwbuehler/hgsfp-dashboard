@@ -1,0 +1,44 @@
+# Two containers: the app, and Caddy terminating TLS in front of it.
+# Moving from a cloud host to a university server is a matter of copying this
+# file plus the two volumes.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Generate once with: python -c "import secrets; print(secrets.token_urlsafe(48))"
+      HGSFP_SECRET_KEY: ${HGSFP_SECRET_KEY:?set HGSFP_SECRET_KEY in deploy/.env}
+      HGSFP_BASE_URL: ${HGSFP_BASE_URL:?set HGSFP_BASE_URL in deploy/.env}
+      # Caddy terminates TLS, so the session cookie may carry Secure.
+      HGSFP_COOKIE_SECURE: "true"
+      HGSFP_DATABASE_PATH: /app/data/hgsfp.db
+      HGSFP_MODEL_PATH: /app/models/all-MiniLM-L6-v2
+    volumes:
+      - survey-data:/app/data
+      - survey-models:/app/models
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  survey-data:
+  survey-models:
+  caddy-data:
+  caddy-config:

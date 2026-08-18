@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ survey.title }}</title>
+  {# Self-hosted SurveyJS runtime — no CDN, so no participant data reaches a third party. #}
+  <link rel="stylesheet" href="/static/vendor/surveyjs/survey-core.min.css">
+  <link rel="stylesheet" href="/static/css/survey.css">
+</head>
+<body>
+  <main class="survey-shell">
+    {% if is_preview %}
+      <p class="preview-banner">Vorschau — Antworten werden nicht gespeichert.</p>
+    {% endif %}
+
+    <div id="consent" class="consent-card">
+      <h1>{{ survey.title }}</h1>
+      {% if survey.intro_text %}<p>{{ survey.intro_text }}</p>{% endif %}
+
+      <h2>Privacy notice</h2>
+      <ul>
+        <li>Your answers are <strong>anonymous</strong>. We store no name, no e-mail address,
+            no IP address and no exact submission time — only the date.</li>
+        <li>The data is processed solely to evaluate the lecture series and is stored on
+            university-operated infrastructure. It is not passed to third parties.</li>
+        <li>Because responses carry no identifier, an individual submission cannot be
+            withdrawn afterwards. The organisers can delete the whole data set on request.</li>
+        <li>Participation is voluntary; you may close this page at any time.</li>
+      </ul>
+      <p class="small"><a href="/privacy" target="_blank">Full privacy statement</a></p>
+
+      <button type="button" id="start-button">Start the questionnaire</button>
+    </div>
+
+    <div id="surveyContainer" hidden></div>
+    <p id="submitError" class="submit-error" hidden></p>
+  </main>
+
+  <script src="/static/vendor/surveyjs/survey.core.min.js"></script>
+  <script src="/static/vendor/surveyjs/survey-js-ui.min.js"></script>
+  <script>
+    (function () {
+      var definitionUrl = {{ definition_url | tojson }};
+      var submitUrl = {{ submit_url | tojson }};
+      var consent = document.getElementById("consent");
+      var container = document.getElementById("surveyContainer");
+      var errorBox = document.getElementById("submitError");
+
+      document.getElementById("start-button").addEventListener("click", function () {
+        consent.hidden = true;
+        container.hidden = false;
+        start();
+      });
+
+      function start() {
+        fetch(definitionUrl)
+          .then(function (r) { return r.json(); })
+          .then(function (definition) {
+            var survey = new Survey.Model(definition);
+
+            survey.onComplete.add(function (sender, options) {
+              if (!submitUrl) {
+                if (options && options.showSaveInProgress) { options.showSaveSuccess(); }
+                return;
+              }
+              if (options && options.showSaveInProgress) { options.showSaveInProgress(); }
+              fetch(submitUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(sender.data)
+              })
+                .then(function (response) {
+                  if (!response.ok) { return response.json().then(function (b) { throw new Error(b.detail || "Submission failed"); }); }
+                  if (options && options.showSaveSuccess) { options.showSaveSuccess(); }
+                })
+                .catch(function (err) {
+                  if (options && options.showSaveError) { options.showSaveError(err.message); }
+                  errorBox.textContent = err.message;
+                  errorBox.hidden = false;
+                });
+            });
+
+            SurveyUI.renderSurvey(survey, container);
+          })
+          .catch(function (err) {
+            errorBox.textContent = "The questionnaire could not be loaded: " + err.message;
+            errorBox.hidden = false;
+          });
+      }
+    })();
+  </script>
+</body>
+</html>

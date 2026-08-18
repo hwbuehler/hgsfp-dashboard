@@ -1,0 +1,9 @@
+{# Save indicator. The server renders it right after writing, so the timestamp
+   is a statement of fact rather than an optimistic client-side guess. #}
+<span class="save-state{{ ' is-error' if error else '' }}">
+  {%- if error -%}
+    ✕ {{ error }}
+  {%- else -%}
+    ✓ {{ message }}{% if saved_at %} um {{ saved_at }}{% endif %}
+  {%- endif -%}
+</span>

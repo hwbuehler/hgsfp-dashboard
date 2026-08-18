@@ -1,0 +1,30 @@
+# Web framework
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+jinja2>=3.1,<4.0
+python-multipart>=0.0.20,<1.0
+pydantic-settings>=2.7,<3.0
+
+# Persistence
+sqlalchemy>=2.0.36,<3.0
+alembic>=1.14,<2.0
+
+# Auth / sessions
+itsdangerous>=2.2,<3.0
+argon2-cffi>=23.1
+
+# Distribution
+qrcode[pil]>=8.0,<9.0
+
+# Analysis (shared with hgsfp-survey-tool)
+# No matplotlib: the Likert charts are emitted as inline SVG, see app/analysis/charts.py
+numpy>=2.0
+scikit-learn>=1.5
+sentence-transformers>=3.0
+
+# Report export
+weasyprint>=63.0
+
+# Tests
+pytest>=8.3
+httpx>=0.28

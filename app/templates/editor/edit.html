@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ survey.title }} — Bearbeiten{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ survey.title }}</h1>
+    <p class="lede">
+      Titel und Auswahllisten pflegen. Fragen und Skalen sind fest vorgegeben und ändern sich nicht.
+    </p>
+  </div>
+  <div class="button-row">
+    <a class="button button-secondary" href="/dashboard">Übersicht</a>
+    <a class="button button-secondary" href="/surveys/{{ survey.id }}/preview" target="_blank">Vorschau</a>
+  </div>
+</div>
+
+{% if survey.status.value == 'published' %}
+  <div class="notice notice-ok">
+    Diese Umfrage ist veröffentlicht. Änderungen wirken sich sofort auf laufende Teilnahmen aus —
+    für größere Anpassungen erst depublizieren.
+    <div class="button-row" style="margin-top: 10px">
+      <a class="button button-secondary" href="/surveys/{{ survey.id }}/distribute">Veröffentlichen</a>
+      <form method="post" action="/surveys/{{ survey.id }}/unpublish">
+        <button type="submit" class="button-secondary">Depublizieren</button>
+      </form>
+      <form method="post" action="/surveys/{{ survey.id }}/close">
+        <button type="submit" class="button-secondary">Umfrage schließen</button>
+      </form>
+    </div>
+  </div>
+{% elif problems %}
+  <div class="notice notice-error">
+    <strong>Vor dem Veröffentlichen zu klären:</strong>
+    <ul>{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+  </div>
+{% else %}
+  <div class="notice notice-info">
+    <div class="status-line">
+      <span>Die Umfrage ist bereit zur Veröffentlichung.</span>
+      <form method="post" action="/surveys/{{ survey.id }}/publish" style="margin-left:auto">
+        <button type="submit">Veröffentlichen</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2>Titel und Einleitung</h2>
+  {# Autosaves 1.5s after typing stops; the button stays for people who
+     expect one and for saving without waiting. #}
+  <form hx-post="/surveys/{{ survey.id }}/title"
+        hx-trigger="submit, input changed delay:1500ms"
+        hx-target="#title-saved" hx-swap="innerHTML">
+    <div class="field">
+      <label for="title">Umfrage-Titel <span class="hint">— erscheint über dem Fragebogen</span></label>
+      <input type="text" id="title" name="title" value="{{ survey.title }}" required>
+    </div>
+    <div class="field">
+      <label for="intro_text">Einleitung <span class="hint">— optional, steht über dem Datenschutzhinweis</span></label>
+      <textarea id="intro_text" name="intro_text" rows="2">{{ survey.intro_text }}</textarea>
+    </div>
+    <div class="button-row">
+      <button type="submit">Speichern</button>
+      <span class="save-pending">Speichert …</span>
+      <span id="title-saved"></span>
+      <span class="autosave-hint">Änderungen werden automatisch gespeichert.</span>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Vorlesungen je Zeitfenster</h2>
+  <p class="small muted" style="margin-top: -6px">
+    <strong>Titel</strong> ist der Text im Auswahlmenü. <strong>Schlüssel</strong> ist der Wert, unter dem
+    die Antwort gespeichert und in der Auswertung benannt wird — kurz halten, z. B. der Nachname.
+    „nicht teilgenommen“ wird automatisch ergänzt und kann nicht gelöscht werden.
+  </p>
+
+  {% for slot in survey.slots %}
+    <div class="slot-block" id="slot-{{ slot.id }}">
+      {% include "editor/_slot.html" %}
+    </div>
+  {% else %}
+    <p class="muted">Noch keine Zeitfenster angelegt.</p>
+  {% endfor %}
+</div>
+
+<details class="card">
+  <summary style="cursor: pointer; font-weight: 600">Weitere Einstellungen</summary>
+
+  <div style="margin-top: 16px">
+    <h2>Zeitfenster hinzufügen</h2>
+    <form method="post" action="/surveys/{{ survey.id }}/slots">
+      <div class="field-row">
+        <div>
+          <label for="new_page_title">Bezeichnung</label>
+          <input type="text" id="new_page_title" name="page_title" placeholder="z. B. Evening Lecture" required>
+        </div>
+        <div>
+          <label for="new_key_prefix">Schlüssel-Präfix</label>
+          <input type="text" id="new_key_prefix" name="key_prefix" placeholder="z. B. el" required>
+        </div>
+        <button type="submit" class="button-secondary">Hinzufügen</button>
+      </div>
+    </form>
+
+    <div class="button-row" style="margin-top: 20px">
+      <a class="button button-secondary" href="/surveys/{{ survey.id }}/definition" target="_blank">
+        Generierte SurveyJS-JSON ansehen
+      </a>
+      <a class="button button-secondary" href="/surveys/{{ survey.id }}/data">Daten &amp; Löschung</a>
+    </div>
+  </div>
+</details>
+{% endblock %}
