@@ -47,8 +47,10 @@ einer Sekunde (`scripts/load_test.py`).
 
 ## Ablauf einer Umfrage
 
-1. **Anlegen** — im Dashboard Titel eingeben und Vorlage wählen. Zeitfenster und Auswahllisten
-   werden aus der Vorlage übernommen. Alternativ direkt **aus einer früheren Ergebnisdatei**:
+1. **Anlegen** — im Dashboard Titel eingeben und Vorlage wählen. Die Zeitfenster kommen aus der
+   Vorlage, je Zeitfenster **eine Beispiel-Vorlesung** als Vorlage zum Überschreiben — nicht die
+   komplette Aufstellung des letzten Durchgangs, die man sonst erst löschen müsste.
+   Alternativ direkt **aus einer früheren Ergebnisdatei**:
    Umfrage, Antworten und Vorlesungsliste entstehen in einem Schritt, die Umfrage wird als
    *geschlossen* angelegt (Archivdaten nehmen keine neuen Antworten an).
 2. **Bearbeiten** (`/surveys/{id}/edit`) — Titel anpassen, Vorlesungen eintragen. Jede Vorlesung
@@ -65,8 +67,9 @@ einer Sekunde (`scripts/load_test.py`).
    hin und bietet „Analyse neu berechnen“ an.
 3. **Prüfen** — veröffentlichen lässt sich erst, wenn jedes Zeitfenster mindestens eine Vorlesung
    hat und keine Schlüssel doppelt vorkommen; der Editor listet offene Punkte auf.
-4. **Veröffentlichen** (`/surveys/{id}/distribute`) — freischalten, Link kopieren oder QR-Code
-   projizieren.
+4. **Veröffentlichen** (`/surveys/{id}/distribute`) — freischalten, Link kopieren, oder die
+   fertige **16:9-Einladungsfolie als PDF** herunterladen (Logo, Hinweistext, QR-Code, Link) und
+   am Ende der Vorlesung projizieren. Der reine QR-Code bleibt zusätzlich als PNG verfügbar.
 5. **Schließen**, sobald genug Antworten da sind.
 6. **Auswerten** (`/surveys/{id}/report`) — „Analyse starten“, dann Vorschau je Vorlesung und
    Export als Einzel-PDF oder ZIP.
@@ -95,6 +98,7 @@ app/
   models.py        Datenmodell
   security.py      argon2-Hashing, Cookie-Session
   blueprint.py     SurveyJS-Original -> wiederverwendbare Blaupause
+  slide.py         16:9-Einladungsfolie als PDF (fpdf2)
   surveyjs.py      Blaupause + Slots -> fertige SurveyJS-Definition; Antwort-Validierung
   routers/         auth · dashboard · editor · distribution · participation · reports
   analysis/        Portierung aus hgsfp-survey-tool, siehe unten
@@ -186,6 +190,19 @@ ohne dass die Analyse (und damit das Clustering) neu laufen muss.
 genutzt: die Vorschau rendert sie im Browser, der Export schickt dieselbe Ausgabe durch
 WeasyPrint. Die `@page`-Regeln stehen in derselben Datei wie die Bildschirmregeln — ein
 Auseinanderlaufen ist damit ausgeschlossen.
+
+---
+
+### Einladungsfolie
+
+`app/slide.py` erzeugt die Folie mit **fpdf2**, nicht mit WeasyPrint. Die Folie soll kurz vor
+einer Vorlesung auf einem beliebigen Laptop entstehen können; WeasyPrint braucht dafür Pango und
+cairo, die unter Windows nicht per `pip` kommen (siehe unten). fpdf2 ist reines Python und
+zeichnet ein festes Layout wie dieses ohne Hilfe. Das Logo wird als SVG eingebettet, bleibt also
+vektoriell.
+
+Die Kern-PDF-Schriften können nur Latin-1. Umlaute sind abgedeckt, typografische Zeichen wie „—"
+nicht — `_latin1()` ersetzt sie, damit ein Gedankenstrich im Titel den Download nicht abbricht.
 
 ---
 

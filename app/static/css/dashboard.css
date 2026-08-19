@@ -599,3 +599,28 @@ form.htmx-request .save-state { display: none; }
 .login h1 { font-size: 40px; }
 .hr { height: 2px; border: 0; margin: 28px 0; background: var(--rule); }
 .button-block { width: 100%; justify-content: flex-start; }
+
+/* Current publication state, stated plainly above the actions that change it. */
+.status-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  background: var(--surface-sunken, #f8fafc);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+}
+
+/* The participation link doubles as a copy button. */
+button.link-box {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font-weight: normal;
+}
+
+button.link-box.is-copied { border-color: var(--accent); }
+button.link-box.is-copied::after { content: " — kopiert"; color: var(--accent); }

@@ -81,6 +81,25 @@ def survey_list(
     )
 
 
+def title_taken(session: Session, title: str, exclude_id: int | None = None) -> bool:
+    """Whether another survey already carries this title.
+
+    Two runs with the same name are indistinguishable everywhere the title is
+    shown — the list, the report heading, the exported PDF filenames — so the
+    second one is refused rather than silently created.
+    """
+    statement = select(Survey.id).where(func.lower(Survey.title) == title.strip().lower())
+    if exclude_id is not None:
+        statement = statement.where(Survey.id != exclude_id)
+    return session.scalars(statement).first() is not None
+
+
+DUPLICATE_TITLE_MESSAGE = (
+    "Es gibt bereits eine Umfrage mit diesem Titel. Bitte einen anderen wählen, "
+    "etwa mit Jahreszahl oder Durchgangsnummer."
+)
+
+
 def seed_slots(
     session: Session,
     survey: Survey,
@@ -106,9 +125,14 @@ def seed_slots(
         session.flush()
 
         if choices_override is None:
+            # One example per slot, not last run's full line-up. The blueprint
+            # carries every lecture of the run it was extracted from; seeding all
+            # of them means deleting five wrong entries before adding the right
+            # ones. A single row shows the expected shape and is quick to edit.
+            blueprint_choices = slot_spec.get("choices", [])
             entries = [
                 (c["value"], c.get("text", c["value"]))
-                for c in slot_spec.get("choices", [])
+                for c in blueprint_choices[:1]
             ]
         else:
             # The file only carries the stored key; the display text starts out
@@ -134,9 +158,16 @@ def create_survey(
     if template is None:
         raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
 
+    clean_title = title.strip() or template.name
+    if title_taken(session, clean_title):
+        return RedirectResponse(
+            f"/dashboard?error={quote(DUPLICATE_TITLE_MESSAGE)}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
     survey = Survey(
         template_id=template.id,
-        title=title.strip() or template.name,
+        title=clean_title,
         public_token=secrets.token_urlsafe(12),
         created_by_id=user.id,
     )
@@ -167,6 +198,13 @@ async def create_survey_from_file(
     if template is None:
         raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
 
+    clean_title = title.strip() or template.name
+    if title_taken(session, clean_title):
+        return RedirectResponse(
+            f"/dashboard?error={quote(DUPLICATE_TITLE_MESSAGE)}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
     raw = await file.read()
     try:
         payloads = parse_export(raw)
@@ -178,7 +216,7 @@ async def create_survey_from_file(
     prefixes = [s["key_prefix"] for s in template.blueprint_json.get("slots", [])]
     survey = Survey(
         template_id=template.id,
-        title=title.strip() or template.name,
+        title=clean_title,
         public_token=secrets.token_urlsafe(12),
         created_by_id=user.id,
         # Archived data is not open for new responses.

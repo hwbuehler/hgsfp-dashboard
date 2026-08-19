@@ -97,14 +97,23 @@
 
 <div class="section">
   <div>
-    <h2>Weitere Einstellungen</h2>
-    <p class="section-note">Selten gebraucht.</p>
+    <h2>Zusätzliches Zeitfenster</h2>
+    <p class="section-note">
+      Nur nötig, wenn dieser Durchgang mehr Vorlesungsblöcke hat als die Vorlage vorsieht —
+      etwa eine Abendvorlesung zusätzlich zu Vormittag, Nachmittag und Industrie.
+    </p>
+    <p class="section-note" style="margin-top: 12px">
+      Ein Zeitfenster wird im Fragebogen zu einer eigenen Seite mit Auswahlmenü und denselben
+      sechs Fragen. Das <strong>Schlüssel-Präfix</strong> bestimmt, wie die Antworten in der
+      Ergebnisdatei heißen: aus <code>el</code> wird <code>el_title</code>,
+      <code>el_interesting</code> und so weiter. Kurz halten, zwei bis drei Zeichen genügen.
+    </p>
   </div>
   <div>
     <form method="post" action="/surveys/{{ survey.id }}/slots">
       <div class="field-row">
         <div class="field">
-          <label for="new_page_title">Zeitfenster hinzufügen <span class="hint">— Bezeichnung</span></label>
+          <label for="new_page_title">Bezeichnung <span class="hint">— Seitentitel im Fragebogen</span></label>
           <input type="text" id="new_page_title" name="page_title" placeholder="z. B. Evening Lecture" required>
         </div>
         <div class="field">

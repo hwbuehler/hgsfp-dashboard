@@ -100,6 +100,16 @@ def survey(auth_client, session_factory):
     return survey_id, token
 
 
+def seeded_lecture(session_factory, survey_id: int, slot: int = 0) -> str:
+    """The lecture the template seeded into a slot.
+
+    Tests used to name "Ollefs" directly; the template now seeds a single
+    example per slot, so they ask the database instead.
+    """
+    with session_factory() as session:
+        return session.get(Survey, survey_id).slots[slot].choices[0].value
+
+
 # --- Auth boundary ------------------------------------------------------------
 
 
@@ -164,7 +174,7 @@ def test_response_is_stored_without_identifying_metadata(auth_client, survey, se
     auth_client.post(
         f"/s/{token}/responses",
         json={
-            "ml_title": "Ollefs",
+            "ml_title": seeded_lecture(session_factory, survey_id),
             "ml_interesting": 4,
             "al_title": "DnA",
             "il_title": "DnA",
@@ -258,7 +268,7 @@ def test_new_survey_is_seeded_from_the_template(auth_client, survey):
     definition = auth_client.get(f"/surveys/{survey_id}/definition").json()
     assert [page["name"] for page in definition["pages"]] == ["ml", "al", "il", "sugg"]
     values = [c["value"] for c in definition["pages"][0]["elements"][0]["choices"]]
-    assert "Ollefs" in values and values[-1] == "DnA"
+    assert len(values) == 2 and values[-1] == "DnA"
 
 
 def test_added_choice_reaches_the_definition(auth_client, survey, session_factory):
@@ -274,11 +284,12 @@ def test_added_choice_reaches_the_definition(auth_client, survey, session_factor
     assert "Neumann" in json.dumps(definition)
 
 
-@pytest.mark.parametrize("value", ["Ollefs", "DnA"])
-def test_conflicting_choice_keys_are_refused(auth_client, survey, session_factory, value):
+@pytest.mark.parametrize("which", ["existing", "reserved"])
+def test_conflicting_choice_keys_are_refused(auth_client, survey, session_factory, which):
     survey_id, _ = survey
     with session_factory() as session:
         slot_id = session.get(Survey, survey_id).slots[0].id
+    value = seeded_lecture(session_factory, survey_id) if which == "existing" else "DnA"
 
     response = auth_client.post(
         f"/surveys/{survey_id}/slots/{slot_id}/choices", data={"text": "X", "value": value}
@@ -548,8 +559,15 @@ def test_invalid_edit_is_refused_without_changing_anything(
 def test_edit_cannot_duplicate_another_key(auth_client, survey, session_factory):
     survey_id, _ = survey
     with session_factory() as session:
+        slot_id = session.get(Survey, survey_id).slots[0].id
+    # The template seeds one example, so a second lecture has to be added first.
+    auth_client.post(
+        f"/surveys/{survey_id}/slots/{slot_id}/choices",
+        data={"text": "Second lecture", "value": "SecondKey"},
+    )
+    with session_factory() as session:
         slot = session.get(Survey, survey_id).slots[0]
-        slot_id, first, second = slot.id, slot.choices[0].id, slot.choices[1].value
+        first, second = slot.choices[0].id, slot.choices[1].value
 
     response = auth_client.post(
         f"/surveys/{survey_id}/slots/{slot_id}/choices/{first}",
@@ -572,3 +590,118 @@ def test_editing_marks_the_survey_as_edited(auth_client, survey, session_factory
     )
     with session_factory() as session:
         assert session.get(Survey, survey_id).updated_at > before
+
+
+# --- Creating a survey from the template --------------------------------------
+
+
+def test_template_seeds_one_example_per_slot(auth_client, survey):
+    """Seeding last run's full line-up meant deleting five wrong rows first."""
+    survey_id, _ = survey
+    definition = auth_client.get(f"/surveys/{survey_id}/definition").json()
+    for page in definition["pages"][:-1]:
+        values = [c["value"] for c in page["elements"][0]["choices"]]
+        assert len(values) == 2, f"{page['name']}: one example plus DnA expected, got {values}"
+        assert values[-1] == "DnA"
+
+
+def test_file_import_still_seeds_every_lecture(auth_client):
+    """The one-example rule applies to the template only, never to real data."""
+    response = auth_client.post(
+        "/surveys/from-file",
+        data={"title": "Archive", "template_id": 1},
+        files={"file": ("s.json", _sample_bytes(), "application/json")},
+    )
+    survey_id = int(response.headers["location"].split("/")[2])
+    definition = auth_client.get(f"/surveys/{survey_id}/definition").json()
+    morning = [c["value"] for c in definition["pages"][0]["elements"][0]["choices"]]
+    assert morning == ["Blekman", "Erdmenger", "Groß", "Ollefs", "Peacock", "DnA"]
+
+
+# --- The invitation slide -----------------------------------------------------
+
+
+def test_slide_is_a_landscape_pdf(auth_client, survey):
+    survey_id, _ = survey
+    response = auth_client.get(f"/surveys/{survey_id}/slide.pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content[:5] == b"%PDF-"
+    assert "qr-slide.pdf" in response.headers["content-disposition"]
+
+
+def test_slide_requires_login(auth_client, survey):
+    survey_id, _ = survey
+    anonymous = TestClient(app, follow_redirects=False)
+    response = anonymous.get(f"/surveys/{survey_id}/slide.pdf")
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_qr_png_still_served_for_the_page_preview(auth_client, survey):
+    survey_id, _ = survey
+    response = auth_client.get(f"/surveys/{survey_id}/qr.png")
+    assert response.status_code == 200
+    assert response.content[:4] == b"\x89PNG"
+
+
+# --- Survey titles must stay distinguishable ---------------------------------
+
+
+def test_second_survey_cannot_reuse_a_title(auth_client, survey, session_factory):
+    """Two runs with the same name are indistinguishable in every list and export."""
+    response = auth_client.post("/surveys", data={"title": "Test Run", "template_id": 1})
+    assert response.status_code == 303
+    assert "error=" in response.headers["location"]
+    with session_factory() as session:
+        assert len(session.scalars(select(Survey)).all()) == 1
+
+
+def test_duplicate_title_is_matched_regardless_of_case_and_spacing(auth_client, survey):
+    response = auth_client.post(
+        "/surveys", data={"title": "  test run  ", "template_id": 1}
+    )
+    assert "error=" in response.headers["location"]
+
+
+def test_file_import_also_refuses_a_taken_title(auth_client, survey, session_factory):
+    response = auth_client.post(
+        "/surveys/from-file",
+        data={"title": "Test Run", "template_id": 1},
+        files={"file": ("s.json", _sample_bytes(), "application/json")},
+    )
+    assert "error=" in response.headers["location"]
+    with session_factory() as session:
+        # Neither the survey nor its responses may be created.
+        assert len(session.scalars(select(Survey)).all()) == 1
+        assert session.scalars(select(ResponseRow)).all() == []
+
+
+def test_renaming_to_a_taken_title_is_refused(auth_client, survey, session_factory):
+    survey_id, _ = survey
+    auth_client.post("/surveys", data={"title": "Second Run", "template_id": 1})
+
+    response = auth_client.post(
+        f"/surveys/{survey_id}/title", data={"title": "Second Run", "intro_text": ""}
+    )
+    assert "is-error" in response.text
+    with session_factory() as session:
+        assert session.get(Survey, survey_id).title == "Test Run"
+
+
+def test_a_survey_may_keep_its_own_title(auth_client, survey):
+    """Saving the title form unchanged must not trip the uniqueness check."""
+    survey_id, _ = survey
+    response = auth_client.post(
+        f"/surveys/{survey_id}/title", data={"title": "Test Run", "intro_text": "Hallo"}
+    )
+    assert "is-error" not in response.text
+
+
+def test_empty_title_is_refused_with_a_sentence(auth_client, survey):
+    survey_id, _ = survey
+    response = auth_client.post(
+        f"/surveys/{survey_id}/title", data={"title": "   ", "intro_text": ""}
+    )
+    assert response.status_code == 200
+    assert "is-error" in response.text

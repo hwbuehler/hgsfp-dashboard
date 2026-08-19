@@ -13,6 +13,8 @@ from app.db import get_session
 from app.models import SurveyStatus, User, utcnow
 from app.routers.dashboard import get_survey
 from app.security import require_user
+from app.analysis.report import slugify
+from app.slide import build_slide
 from app.surveyjs import validate_for_publish
 from app.templating import templates
 
@@ -113,4 +115,20 @@ def qr_code(
         headers={
             "Content-Disposition": f'inline; filename="umfrage-{survey.id}-qr.png"'
         },
+    )
+
+
+@router.get("/surveys/{survey_id}/slide.pdf")
+def qr_slide(
+    survey_id: int,
+    user: User = Depends(require_user),
+    session: Session = Depends(get_session),
+):
+    """The invitation slide, ready to project at the end of a lecture."""
+    survey = get_survey(session, survey_id)
+    filename = f"{slugify(survey.title)}-qr-slide.pdf"
+    return Response(
+        content=build_slide(participation_url(survey.public_token)),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

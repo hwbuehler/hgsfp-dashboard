@@ -2,18 +2,6 @@
 {% block title %}Auswertung — {{ survey.title }}{% endblock %}
 
 {% block content %}
-{% set head_actions %}
-  {% if context %}
-    <a class="button button-secondary" href="/surveys/{{ survey.id }}/report/all" target="_blank">
-      Gesamt-Report ansehen
-    </a>
-  {% endif %}
-  <form method="post" action="/surveys/{{ survey.id }}/analysis">
-    <button type="submit" {% if response_count == 0 %}disabled{% endif %}>
-      {% if context %}Analyse neu berechnen{% else %}Analyse starten{% endif %}
-    </button>
-  </form>
-{% endset %}
 {% with active = 'report' %}{% include "_survey_head.html" %}{% endwith %}
 
 <div style="margin-top: 32px">
@@ -63,39 +51,26 @@
         </p>
       </div>
     {% endif %}
+
+    <form method="post" action="/surveys/{{ survey.id }}/analysis" style="margin-top: 20px">
+      <button type="submit" {% if response_count == 0 %}disabled{% endif %}>
+        {% if context %}Analyse neu berechnen{% else %}Analyse starten{% endif %}
+      </button>
+    </form>
   </div>
 </div>
 
 {% if context %}
   <div class="section">
     <div>
-      <h2>Vorschau je Vorlesung</h2>
-      <p class="section-note">Die Vorschau zeigt exakt das Layout, das auch das PDF verwendet.</p>
-    </div>
-    <div class="card-grid">
-      {% for section in context.sections %}
-        <a class="tile" href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">
-          <div class="tile-title">{{ section.title }}</div>
-          <div class="tile-meta">
-            {{ section.response_count }} Antworten
-            {%- if section.dna_count %} · {{ section.dna_count }} nicht teilgenommen{% endif %}
-          </div>
-        </a>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="section">
-    <div>
       <h2>Export</h2>
       <p class="section-note">
-        Einzelne Vorlesungen: Vorschau öffnen und dort „als PDF“ anhängen, oder direkt
-        <code>/surveys/{{ survey.id }}/report/&lt;abschnitt&gt;/pdf</code> aufrufen.
+        Die Vorschau zeigt exakt das Layout, das auch das PDF verwendet.
       </p>
     </div>
     <div>
       <div class="button-row">
-        <a class="button button-secondary" href="/surveys/{{ survey.id }}/report/all/pdf">
+        <a class="button" href="/surveys/{{ survey.id }}/report/all/pdf">
           Gesamt-Report als PDF
         </a>
         <a class="button button-secondary" href="/surveys/{{ survey.id }}/reports.zip">

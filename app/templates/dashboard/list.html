@@ -9,19 +9,12 @@
 
 {% block content %}
 {% set published_count = surveys | selectattr('status.value', 'equalto', 'published') | list | length %}
-{% set total_responses = counts.values() | sum if counts else 0 %}
 
 <div class="page-head">
   <div>
     <span class="kicker">Übersicht</span>
     <h1>Umfragen</h1>
   </div>
-  {% if templates_available %}
-    <div class="button-row">
-      <button type="button" class="button-secondary" data-open-create="file">Aus Datei importieren</button>
-      <button type="button" data-open-create="template">Neue Umfrage</button>
-    </div>
-  {% endif %}
 </div>
 
 <div class="stat-row">
@@ -32,10 +25,6 @@
   <div class="stat">
     <div class="stat-value stat-accent">{{ published_count }}</div>
     <div class="stat-label">Veröffentlicht</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ total_responses }}</div>
-    <div class="stat-label">Antworten gesamt</div>
   </div>
 </div>
 
@@ -49,8 +38,9 @@
 
 {% if templates_available %}
   {# One panel with two modes, instead of two stacked forms competing for
-     attention. Opened from the page head; open by default after an error. #}
-  <div class="panel" id="create-panel" {% if not error %}hidden{% endif %}>
+     attention. Permanently visible: creating a survey is the reason to be on
+     this page, so it should not hide behind a button. #}
+  <div class="panel" id="create-panel">
     <div class="page-head" style="border: none; padding: 0; margin-bottom: 20px; align-items: flex-start">
       <div>
         <h2>Neue Umfrage anlegen</h2>
@@ -163,24 +153,24 @@
       file: panel.querySelector('[data-create-form="file"]')
     };
 
-    function show(mode) {
-      panel.hidden = false;
+    function show(mode, focusFirst) {
       Object.keys(forms).forEach(function (key) {
         forms[key].hidden = key !== mode;
       });
       panel.querySelectorAll("[data-create-mode]").forEach(function (button) {
         button.setAttribute("aria-pressed", String(button.dataset.createMode === mode));
       });
-      var first = forms[mode].querySelector("input");
-      if (first) first.focus();
+      if (focusFirst) {
+        var first = forms[mode].querySelector("input");
+        if (first) first.focus();
+      }
     }
 
-    document.querySelectorAll("[data-open-create]").forEach(function (button) {
-      button.addEventListener("click", function () { show(this.dataset.openCreate); });
-    });
     panel.querySelectorAll("[data-create-mode]").forEach(function (button) {
-      button.addEventListener("click", function () { show(this.dataset.createMode); });
+      button.addEventListener("click", function () { show(this.dataset.createMode, true); });
     });
+    // After a failed import, reopen on the mode that failed.
+    show({{ ('file' if error else 'template') | tojson }}, false);
   })();
 </script>
 {% endif %}

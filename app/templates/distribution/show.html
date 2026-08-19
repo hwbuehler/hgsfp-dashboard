@@ -3,7 +3,6 @@
 
 {% block content %}
 {% set head_actions %}
-  <a class="button button-secondary" href="{{ url }}" target="_blank">Link öffnen</a>
   {% if survey.status.value != 'published' %}
     <form method="post" action="/surveys/{{ survey.id }}/publish">
       <button type="submit">Jetzt veröffentlichen</button>
@@ -31,40 +30,64 @@
   </div>
   <div class="share-grid">
     <div>
-      <div class="link-box" id="share-url">{{ url }}</div>
+      {# Click-to-copy on the box itself, so copying survives without a button
+         of its own now that the primary action is opening the link. #}
+      <button type="button" class="link-box" id="share-url"
+              title="Klicken, um den Link zu kopieren">{{ url }}</button>
       <div class="button-row" style="margin-top: 12px">
-        <button type="button" id="copy-button">Link kopieren</button>
-        <a class="button button-secondary" href="/surveys/{{ survey.id }}/qr.png" download>
-          QR-Code herunterladen
+        <a class="button" href="{{ url }}" target="_blank" rel="noopener">Link öffnen</a>
+        <a class="button button-secondary" href="/surveys/{{ survey.id }}/slide.pdf">
+          Slide herunterladen (PDF)
+        </a>
+        <a class="button button-quiet" href="/surveys/{{ survey.id }}/qr.png" download>
+          Nur QR-Code (PNG)
         </a>
       </div>
     </div>
     <div class="qr-panel">
       <img src="/surveys/{{ survey.id }}/qr.png" alt="QR-Code für den Teilnahme-Link">
-      <p class="small muted" style="margin-top: 8px">Zum Projizieren im Hörsaal</p>
+      <p class="small muted" style="margin-top: 8px">
+        Das PDF ist eine fertige 16:9-Folie mit Logo, Hinweistext und Link — zum Projizieren
+        am Ende der Vorlesung.
+      </p>
     </div>
   </div>
 </div>
 
-{% if survey.status.value == 'published' %}
-  <div class="section">
-    <div>
-      <h2>Status</h2>
-      <p class="section-note">
-        Nach dem Schließen werden keine weiteren Antworten angenommen. Die bereits gesammelten
-        Antworten bleiben erhalten.
-      </p>
-    </div>
-    <div>
-      <div class="action-row">
-        <div>
-          <div class="action-title">Umfrage schließen</div>
-          <div class="action-note">Beendet die Teilnahme endgültig für diesen Durchgang.</div>
+{% set status_labels = {'draft': 'Entwurf', 'published': 'Veröffentlicht', 'closed': 'Geschlossen'} %}
+{% set status_notes = {
+  'draft': 'Der Link ist erreichbar, nimmt aber keine Antworten an.',
+  'published': 'Der Link nimmt Antworten an.',
+  'closed': 'Es werden keine weiteren Antworten angenommen; die gesammelten bleiben erhalten.',
+} %}
+
+<div class="section">
+  <div>
+    <h2>Status</h2>
+    <p class="section-note">
+      Wer den Link öffnet, bekommt je nach Status den Fragebogen oder einen Hinweis.
+    </p>
+  </div>
+  <div>
+    <div class="status-panel">
+      <span class="chip chip-{{ survey.status.value }}">{{ status_labels[survey.status.value] }}</span>
+      <div>
+        <div class="action-title">{{ status_notes[survey.status.value] }}</div>
+        <div class="action-note">
+          {%- if survey.status.value == 'published' and survey.published_at %}
+            veröffentlicht {{ survey.published_at.strftime('%d.%m.%Y %H:%M') }} UTC
+          {%- elif survey.status.value == 'closed' and survey.closed_at %}
+            geschlossen {{ survey.closed_at.strftime('%d.%m.%Y %H:%M') }} UTC
+          {%- else %}
+            noch nicht veröffentlicht
+          {%- endif %}
         </div>
-        <form method="post" action="/surveys/{{ survey.id }}/close">
-          <button type="submit" class="button-secondary">Schließen</button>
-        </form>
       </div>
+    </div>
+
+    {% if survey.status.value == 'published' %}
+      {# Depublizieren first: it is the reversible step, and putting the
+         irreversible one on top made it the easier target. #}
       <div class="action-row">
         <div>
           <div class="action-title">Depublizieren</div>
@@ -74,17 +97,39 @@
           <button type="submit" class="button-secondary">Zurück zu Entwurf</button>
         </form>
       </div>
-    </div>
+      <div class="action-row">
+        <div>
+          <div class="action-title">Umfrage schließen</div>
+          <div class="action-note">Beendet die Teilnahme endgültig für diesen Durchgang.</div>
+        </div>
+        <form method="post" action="/surveys/{{ survey.id }}/close">
+          <button type="submit" class="button-secondary">Schließen</button>
+        </form>
+      </div>
+    {% elif survey.status.value == 'closed' %}
+      <div class="action-row">
+        <div>
+          <div class="action-title">Erneut veröffentlichen</div>
+          <div class="action-note">Nimmt wieder Antworten an; die bisherigen bleiben erhalten.</div>
+        </div>
+        <form method="post" action="/surveys/{{ survey.id }}/publish">
+          <button type="submit" class="button-secondary">Veröffentlichen</button>
+        </form>
+      </div>
+    {% endif %}
   </div>
-{% endif %}
+</div>
 
 <script>
-  document.getElementById("copy-button").addEventListener("click", function () {
-    var button = this;
-    navigator.clipboard.writeText({{ url | tojson }}).then(function () {
-      button.textContent = "Kopiert";
-      setTimeout(function () { button.textContent = "Link kopieren"; }, 1800);
+  (function () {
+    var box = document.getElementById("share-url");
+    var url = {{ url | tojson }};
+    box.addEventListener("click", function () {
+      navigator.clipboard.writeText(url).then(function () {
+        box.classList.add("is-copied");
+        setTimeout(function () { box.classList.remove("is-copied"); }, 1800);
+      });
     });
-  });
+  })();
 </script>
 {% endblock %}

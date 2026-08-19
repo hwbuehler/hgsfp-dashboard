@@ -2,11 +2,6 @@
 {% block title %}Daten — {{ survey.title }}{% endblock %}
 
 {% block content %}
-{% set head_actions %}
-  <a class="button button-secondary" href="/surveys/{{ survey.id }}/export.json">
-    Rohdaten exportieren (JSON)
-  </a>
-{% endset %}
 {% with active = 'data' %}{% include "_survey_head.html" %}{% endwith %}
 
 <div style="margin-top: 32px">
@@ -30,9 +25,12 @@
     </p>
   </div>
   <div>
-    <div class="stat" style="padding: 0">
-      <div class="stat-value">{{ response_count }}</div>
-      <div class="stat-label">Gespeicherte Antworten</div>
+    {# The header already states the response count; repeating it here as a big
+       number invited reading the two as different figures. #}
+    <div class="button-row">
+      <a class="button button-secondary" href="/surveys/{{ survey.id }}/export.json">
+        Rohdaten exportieren (JSON)
+      </a>
     </div>
   </div>
 </div>

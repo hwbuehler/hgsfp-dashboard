@@ -15,6 +15,9 @@ argon2-cffi>=23.1
 
 # Distribution
 qrcode[pil]>=8.0,<9.0
+# The QR invitation slide is a fixed layout and must also work on a plain
+# Windows machine, where WeasyPrint's native libraries are unavailable.
+fpdf2>=2.8,<3.0
 
 # Analysis (shared with hgsfp-survey-tool)
 # No matplotlib: the Likert charts are emitted as inline SVG, see app/analysis/charts.py

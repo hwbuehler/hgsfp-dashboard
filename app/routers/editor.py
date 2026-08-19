@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.db import get_session
 from app.models import Response, SlotChoice, Survey, SurveySlot, User, utcnow
-from app.routers.dashboard import get_survey
+from app.routers.dashboard import DUPLICATE_TITLE_MESSAGE, get_survey, title_taken
 from app.security import require_user
 from app.surveyjs import build_definition, validate_for_publish
 from app.templating import templates
@@ -129,13 +129,21 @@ def edit_survey(
 def update_title(
     request: Request,
     survey_id: int,
-    title: str = Form(...),
+    # Defaulted so an empty field reaches the check below and comes back as a
+    # sentence, rather than as a 422 from the framework.
+    title: str = Form(""),
     intro_text: str = Form(""),
     user: User = Depends(require_user),
     session: Session = Depends(get_session),
 ):
     survey = get_survey(session, survey_id)
-    survey.title = title.strip()
+    clean_title = title.strip()
+    if not clean_title:
+        return _refused(request, "Der Titel darf nicht leer sein.")
+    if title_taken(session, clean_title, exclude_id=survey.id):
+        return _refused(request, DUPLICATE_TITLE_MESSAGE)
+
+    survey.title = clean_title
     survey.intro_text = intro_text.strip()
     _touch(survey)
     session.commit()
