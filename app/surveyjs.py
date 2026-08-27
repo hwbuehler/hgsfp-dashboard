@@ -108,6 +108,39 @@ def validate_for_publish(survey: Survey) -> list[str]:
 RATING_KEYS = ("interesting", "new", "expected", "exciting", "structure", "level")
 FREE_TEXT_KEYS = ("sugg_organization", "sugg_topics")
 
+# A comment box, not an essay field. Real answers run to a couple of hundred
+# characters; the cap is here because the submission endpoint is public, and an
+# unbounded string ends up both in the database and in every later analysis run.
+MAX_TEXT_LENGTH = 4000
+
+
+def _rating_value(raw: Any, key: str) -> int:
+    """Coerce a submitted rating to 1-5, refusing anything that is not exactly that.
+
+    ``int()`` is too forgiving on its own: it turns ``True`` into a 1 and 4.9
+    into a 4, so a malformed client would silently contribute real-looking
+    ratings to the statistics.
+    """
+    if isinstance(raw, bool):
+        raise ValidationProblem(f"Ungültiger Wert für {key}.")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationProblem(f"Ungültiger Wert für {key}.") from None
+    if isinstance(raw, float) and value != raw:
+        raise ValidationProblem(f"Ungültiger Wert für {key}.")
+    if not 1 <= value <= 5:
+        raise ValidationProblem(f"Wert für {key} liegt außerhalb 1–5.")
+    return value
+
+
+def _free_text(raw: str, key: str) -> str:
+    if len(raw) > MAX_TEXT_LENGTH:
+        raise ValidationProblem(
+            f"Der Text bei {key} ist zu lang (höchstens {MAX_TEXT_LENGTH} Zeichen)."
+        )
+    return raw
+
 
 def validate_payload(survey: Survey, payload: dict[str, Any]) -> dict[str, Any]:
     """Reduce a submitted SurveyJS result to the fields we expect and trust.
@@ -138,19 +171,13 @@ def validate_payload(survey: Survey, payload: dict[str, Any]) -> dict[str, Any]:
             raw = payload.get(f"{prefix}_{key}")
             if raw is None:
                 continue
-            try:
-                value = int(raw)
-            except (TypeError, ValueError):
-                raise ValidationProblem(f"Ungültiger Wert für {prefix}_{key}.") from None
-            if not 1 <= value <= 5:
-                raise ValidationProblem(f"Wert für {prefix}_{key} liegt außerhalb 1–5.")
-            cleaned[f"{prefix}_{key}"] = value
+            cleaned[f"{prefix}_{key}"] = _rating_value(raw, f"{prefix}_{key}")
 
     comments = payload.get(LECTURE_COMMENTS_QUESTION)
     if isinstance(comments, dict):
         allowed_items = {slot.comment_item_name for slot in survey.slots}
         kept = {
-            name: str(text)
+            name: _free_text(text, name)
             for name, text in comments.items()
             if name in allowed_items and isinstance(text, str) and text.strip()
         }
@@ -160,7 +187,7 @@ def validate_payload(survey: Survey, payload: dict[str, Any]) -> dict[str, Any]:
     for key in FREE_TEXT_KEYS:
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
-            cleaned[key] = value
+            cleaned[key] = _free_text(value, key)
 
     if not cleaned:
         raise ValidationProblem("Die Antwort enthält keine auswertbaren Angaben.")

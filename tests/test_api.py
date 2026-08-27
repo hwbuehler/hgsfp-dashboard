@@ -705,3 +705,165 @@ def test_empty_title_is_refused_with_a_sentence(auth_client, survey):
     )
     assert response.status_code == 200
     assert "is-error" in response.text
+
+
+# --- Submission hardening ------------------------------------------------
+#
+# The public POST endpoint is the one route an unauthenticated stranger with the
+# link can reach, and the one a phone on a flaky lecture-hall network aborts
+# halfway through. Both used to end in a 500.
+
+
+@pytest.fixture
+def open_survey(auth_client, survey):
+    survey_id, token = survey
+    auth_client.post(f"/surveys/{survey_id}/publish")
+    return survey_id, token
+
+
+@pytest.mark.parametrize(
+    "body",
+    [b"{not json", b"", b"null", b"[1, 2, 3]", b'"a string"'],
+    ids=["malformed", "empty", "null", "list", "string"],
+)
+def test_unparseable_body_is_a_client_error(client, open_survey, body):
+    """A truncated POST is the participant's network, not a server fault."""
+    _, token = open_survey
+    response = client.post(
+        f"/s/{token}/responses",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400, response.text
+
+
+def test_oversized_body_is_refused_before_it_is_buffered(client, open_survey):
+    from app.routers.participation import MAX_BODY_BYTES
+
+    _, token = open_survey
+    response = client.post(
+        f"/s/{token}/responses",
+        content=b'{"sugg_topics": "' + b"x" * (MAX_BODY_BYTES + 1024) + b'"}',
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+
+
+def test_overlong_free_text_is_refused(client, open_survey):
+    from app.surveyjs import MAX_TEXT_LENGTH
+
+    _, token = open_survey
+    response = client.post(
+        f"/s/{token}/responses", json={"sugg_topics": "x" * (MAX_TEXT_LENGTH + 1)}
+    )
+    assert response.status_code == 400
+
+
+def test_a_boolean_is_not_a_rating(client, open_survey, session_factory):
+    """int(True) is 1, so an unchecked box used to become a "strongly disagree"."""
+    survey_id, token = open_survey
+    response = client.post(
+        f"/s/{token}/responses",
+        json={
+            "ml_title": seeded_lecture(session_factory, survey_id),
+            "ml_interesting": True,
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_a_fractional_rating_is_not_silently_truncated(
+    client, open_survey, session_factory
+):
+    survey_id, token = open_survey
+    lecture = seeded_lecture(session_factory, survey_id)
+    assert (
+        client.post(
+            f"/s/{token}/responses",
+            json={"ml_title": lecture, "ml_interesting": 4.9},
+        ).status_code
+        == 400
+    )
+    # A whole number that arrived as a float is still a legitimate 4.
+    assert (
+        client.post(
+            f"/s/{token}/responses",
+            json={"ml_title": lecture, "ml_interesting": 4.0},
+        ).status_code
+        == 200
+    )
+
+
+# --- Definition cache ----------------------------------------------------
+
+
+def test_definition_is_revalidated_with_an_etag(client, open_survey):
+    _, token = open_survey
+    first = client.get(f"/s/{token}/definition.json")
+    etag = first.headers["etag"]
+
+    again = client.get(
+        f"/s/{token}/definition.json", headers={"If-None-Match": etag}
+    )
+    assert again.status_code == 304
+    assert again.content == b""
+
+
+def test_editing_a_lecture_invalidates_the_cached_definition(
+    auth_client, open_survey, session_factory
+):
+    """The cache is keyed on updated_at, so every edit path must touch it."""
+    survey_id, token = open_survey
+    with session_factory() as session:
+        slot = session.get(Survey, survey_id).slots[0]
+        slot_id, choice_id = slot.id, slot.choices[0].id
+
+    before = auth_client.get(f"/s/{token}/definition.json")
+    assert "Renamed Lecture" not in before.text
+
+    auth_client.post(
+        f"/surveys/{survey_id}/slots/{slot_id}/choices/{choice_id}",
+        data={"text": "Renamed Lecture", "value": "renamed"},
+    )
+
+    after = auth_client.get(f"/s/{token}/definition.json")
+    assert "Renamed Lecture" in after.text, "participants were served a stale form"
+    assert after.headers["etag"] != before.headers["etag"]
+
+
+def test_adding_a_slot_invalidates_the_cached_definition(auth_client, open_survey):
+    survey_id, token = open_survey
+    before = auth_client.get(f"/s/{token}/definition.json")
+    assert len(before.json()["pages"]) == 4  # three lectures plus suggestions
+
+    auth_client.post(
+        f"/surveys/{survey_id}/slots",
+        data={"key_prefix": "evening", "page_title": "Evening Lecture"},
+    )
+
+    after = auth_client.get(f"/s/{token}/definition.json")
+    assert len(after.json()["pages"]) == 5
+    assert after.headers["etag"] != before.headers["etag"]
+
+
+def test_adding_or_removing_a_slot_marks_the_survey_edited(
+    auth_client, survey, session_factory
+):
+    """Without this the report's staleness warning misses a changed line-up."""
+    survey_id, _ = survey
+    with session_factory() as session:
+        before = session.get(Survey, survey_id).updated_at
+
+    auth_client.post(
+        f"/surveys/{survey_id}/slots",
+        data={"key_prefix": "evening", "page_title": "Evening Lecture"},
+    )
+    with session_factory() as session:
+        reloaded = session.get(Survey, survey_id)
+        after_add = reloaded.updated_at
+        new_slot = [s for s in reloaded.slots if s.key_prefix == "evening"][0].id
+    assert after_add > before
+
+    auth_client.post(f"/surveys/{survey_id}/slots/{new_slot}/delete")
+    with session_factory() as session:
+        assert session.get(Survey, survey_id).updated_at > after_add

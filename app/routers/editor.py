@@ -331,6 +331,7 @@ def add_slot(
             position=max((s.position for s in survey.slots), default=-1) + 1,
         )
     )
+    _touch(survey)
     session.commit()
     return RedirectResponse(
         f"/surveys/{survey_id}/edit", status_code=status.HTTP_303_SEE_OTHER
@@ -344,9 +345,10 @@ def delete_slot(
     user: User = Depends(require_user),
     session: Session = Depends(get_session),
 ):
-    get_survey(session, survey_id)
+    survey = get_survey(session, survey_id)
     slot = _get_slot(session, survey_id, slot_id)
     session.delete(slot)
+    _touch(survey)
     session.commit()
     return RedirectResponse(
         f"/surveys/{survey_id}/edit", status_code=status.HTTP_303_SEE_OTHER
