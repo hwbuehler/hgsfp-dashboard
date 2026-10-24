@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}HGSFP Umfrage-Dashboard{% endblock %}</title>
+  <title>{% block title %}HGSFP Analysis Dashboard{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/dashboard.css">
   <script src="/static/js/htmx.min.js" defer></script>
 </head>
@@ -11,8 +11,24 @@
   {% if user %}
     <header class="topbar">
       <div class="topbar-inner">
-        <a href="/dashboard" class="brand">HGSFP Umfragen</a>
+        <a href="/dashboard" class="brand">HGSFP Analysis</a>
         <nav>
+          <details class="page-menu">
+            <summary>Pages</summary>
+            <div class="page-menu-panel">
+              <a href="/dashboard">Dashboard</a>
+              {% if survey is defined and survey %}
+                <a href="/surveys/{{ survey.id }}/report">Analysis overview</a>
+                <a href="/surveys/{{ survey.id }}/lectures">Lecturer names &amp; lecture titles</a>
+                {% if context is defined and context %}
+                  <span class="page-menu-heading">Report pages</span>
+                  {% for section in context.sections %}
+                    <a href="/surveys/{{ survey.id }}/report/{{ section.scope }}">{{ section.title }}{% if section.scope.startswith('lecture-') and section.subtitle %} — {{ section.subtitle }}{% endif %}</a>
+                  {% endfor %}
+                {% endif %}
+              {% endif %}
+            </div>
+          </details>
           <span class="who">{{ user.display_name or user.username }}</span>
           <form method="post" action="/logout">
             <button type="submit" class="button-secondary">Abmelden</button>

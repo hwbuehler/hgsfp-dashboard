@@ -159,6 +159,19 @@ def cluster_comments(
     if len(prepared) == 1:
         return ClusteredComments(raw=prepared, clustered=[f"{prepared[0]} (x1)"])
 
+    # AgglomerativeClustering materialises an n x n distance matrix, so memory
+    # grows with the square of the input: 10k items is ~800 MB, 100k is 80 GB.
+    # A real run produces a few hundred, so hitting this means the data is not
+    # what we think it is — drop the tail rather than take the process down.
+    if len(prepared) > settings.max_cluster_items:
+        logger.warning(
+            "Clustering %d items exceeds the %d limit — using the first %d",
+            len(prepared),
+            settings.max_cluster_items,
+            settings.max_cluster_items,
+        )
+        prepared = prepared[: settings.max_cluster_items]
+
     from sklearn.cluster import AgglomerativeClustering
 
     embeddings = get_model().encode(prepared, convert_to_numpy=True)

@@ -1,25 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Auswertung — {{ survey.title }}{% endblock %}
+{% block title %}Analysis — {{ survey.title }}{% endblock %}
 
 {% block content %}
-{% with active = 'report' %}{% include "_survey_head.html" %}{% endwith %}
+<div class="page-head">
+  <div><a class="kicker" href="/dashboard">← Analysis dashboard</a><h1>{{ survey.title }}</h1><div class="survey-meta">{{ response_count }} responses · {{ survey.slots | length }} course types</div></div>
+  <a class="button button-secondary" href="/surveys/{{ survey.id }}/lectures">Edit lecturer names &amp; lecture titles</a>
+</div>
 
 <div style="margin-top: 32px">
   {% if created %}
     <div class="notice notice-ok">
       <p>
-        Umfrage angelegt und {{ created }} Antworten importiert. Die Vorlesungen wurden aus der
-        Datei übernommen — im <a href="/surveys/{{ survey.id }}/edit">Editor</a> lassen sich die
-        Anzeigetitel ergänzen. Jetzt „Analyse starten“.
+        Imported {{ created }} responses. Start the analysis to generate previews and PDFs.
       </p>
     </div>
+  {% endif %}
+  {% if details_updated %}
+    <div class="notice notice-ok"><p>Lecture details saved. Recalculate the analysis to update report titles.</p></div>
   {% endif %}
 
   {% if is_stale %}
     <div class="notice notice-error">
       <p>
-        Die Umfrage wurde nach der letzten Analyse bearbeitet. Vorschau und PDF zeigen noch den
-        alten Stand — „Analyse neu berechnen“, um sie zu aktualisieren.
+        The dataset changed after the last analysis. Recalculate to refresh previews and PDFs.
       </p>
     </div>
   {% endif %}
@@ -27,8 +30,7 @@
   {% if response_count == 0 %}
     <div class="notice">
       <p>
-        Noch keine Antworten — unter <a href="/surveys/{{ survey.id }}/data">Daten</a> lässt sich
-        eine bestehende Ergebnisdatei importieren.
+        No responses were found in this dataset.
       </p>
     </div>
   {% endif %}
@@ -36,8 +38,8 @@
 
 <div class="section">
   <div>
-    <h2>Analyse</h2>
-    <p class="section-note">Kommentar-Clustering kann einige Sekunden dauern.</p>
+    <h2>Analysis</h2>
+    <p class="section-note">Comment clustering can take a few seconds.</p>
   </div>
   <div>
     {% with survey_id = survey.id, reloaded = (context is not none) %}
@@ -54,7 +56,7 @@
 
     <form method="post" action="/surveys/{{ survey.id }}/analysis" style="margin-top: 20px">
       <button type="submit" {% if response_count == 0 %}disabled{% endif %}>
-        {% if context %}Analyse neu berechnen{% else %}Analyse starten{% endif %}
+        {% if context %}Recalculate analysis{% else %}Start analysis{% endif %}
       </button>
     </form>
   </div>
@@ -63,18 +65,18 @@
 {% if context %}
   <div class="section">
     <div>
-      <h2>Export</h2>
+      <h2>Reports</h2>
       <p class="section-note">
-        Die Vorschau zeigt exakt das Layout, das auch das PDF verwendet.
+        Preview and PDF use the same report layout.
       </p>
     </div>
     <div>
       <div class="button-row">
         <a class="button" href="/surveys/{{ survey.id }}/report/all/pdf">
-          Gesamt-Report als PDF
+          Full report PDF
         </a>
         <a class="button button-secondary" href="/surveys/{{ survey.id }}/reports.zip">
-          Alle Einzel-PDFs als ZIP
+          Reports ZIP (skill courses grouped by lecturer)
         </a>
       </div>
 
@@ -85,14 +87,19 @@
         <tbody>
           {% for section in context.sections %}
             <tr>
-              <td>{{ section.title }}</td>
+              <td>{{ section.title }}{% if section.scope.startswith('lecture-') and section.subtitle %} — {{ section.subtitle }}{% endif %}</td>
               <td class="numeric">{{ section.response_count }}</td>
               <td style="text-align: right">
                 <span class="row-actions">
                   <a class="button button-quiet"
                      href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">Vorschau</a>
-                  <a class="button button-quiet"
-                     href="/surveys/{{ survey.id }}/report/{{ section.scope }}/pdf">PDF</a>
+                  {% if section.scope.startswith('lecture-sc-') %}
+                    <a class="button button-quiet"
+                       href="/surveys/{{ survey.id }}/skill-course-pdf?lecturer={{ section.title | urlencode }}">Lecturer PDF</a>
+                  {% else %}
+                    <a class="button button-quiet"
+                       href="/surveys/{{ survey.id }}/report/{{ section.scope }}/pdf">PDF</a>
+                  {% endif %}
                 </span>
               </td>
             </tr>

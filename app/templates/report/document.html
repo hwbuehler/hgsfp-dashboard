@@ -13,6 +13,18 @@
   {# Screen-only: the same @page rules drive the browser's print dialogue, so
      "Save as PDF" from here produces the layout the server-side export produces. #}
   <div class="screen-actions">
+    <details class="report-page-menu">
+      <summary>Pages</summary>
+      <div class="report-page-menu-panel">
+        <a href="{{ screen_actions.dashboard_url }}">Dashboard</a>
+        <a href="{{ screen_actions.analysis_url }}">Analysis overview</a>
+        <a href="{{ screen_actions.details_url }}">Lecturer names &amp; lecture titles</a>
+        <span class="report-page-menu-heading">Report pages</span>
+        {% for page in screen_actions.report_pages %}
+          <a href="{{ page.url }}">{{ page.label }}</a>
+        {% endfor %}
+      </div>
+    </details>
     <a href="{{ screen_actions.pdf_url }}">Als PDF herunterladen</a>
     <button type="button" onclick="window.print()">Drucken / Als PDF speichern</button>
   </div>

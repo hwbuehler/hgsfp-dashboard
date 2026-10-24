@@ -65,6 +65,35 @@ def derive_slot_choices(
     return found
 
 
+def derive_slots(payloads: list[dict[str, Any]], dna_value: str = "DnA") -> list[dict[str, Any]]:
+    """Discover analysis slots from SurveyJS ``*_title`` fields.
+
+    Result exports can contain new course types (such as ``sc_``) without a
+    dashboard template update. Keep the stored key prefix as the slot identity.
+    """
+    found = {
+        key[:-6] for payload in payloads for key in payload
+        if key.endswith("_title") and len(key) > 6
+    }
+    known_order = {"ml": 0, "al": 1, "sc": 2, "il": 3}
+    prefixes = sorted(found, key=lambda prefix: (known_order.get(prefix, 99), prefix))
+    if not prefixes:
+        raise ImportError_('Die Datei enthält keine Felder im Format "*_title".')
+    return [
+        {
+            "key_prefix": prefix,
+            "page_title": {
+                "ml": "Morning Lectures",
+                "al": "Afternoon Lectures",
+                "il": "Industry Lectures",
+                "sc": "Skill Courses",
+            }.get(prefix, prefix.upper()),
+            "choices": derive_slot_choices(payloads, [prefix], dna_value)[prefix],
+        }
+        for prefix in prefixes
+    ]
+
+
 def import_into(session: Session, survey: Survey, raw: str | bytes) -> int:
     """Append the file's responses to a survey.  Returns how many were stored."""
     payloads = parse_export(raw)

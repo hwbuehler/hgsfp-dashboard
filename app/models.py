@@ -106,7 +106,7 @@ class Survey(Base):
     __tablename__ = "surveys"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    template_id: Mapped[int] = mapped_column(ForeignKey("survey_templates.id"))
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("survey_templates.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(255))
     public_token: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     status: Mapped[SurveyStatus] = mapped_column(
@@ -191,6 +191,7 @@ class SlotChoice(Base):
     )
     value: Mapped[str] = mapped_column(String(120))
     text: Mapped[str] = mapped_column(Text)
+    lecturer_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
 
     slot: Mapped[SurveySlot] = relationship(back_populates="choices")

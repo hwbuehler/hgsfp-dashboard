@@ -23,6 +23,14 @@ def _build_engine() -> Engine:
         # FastAPI runs sync endpoints in a threadpool, so a connection may be
         # handed to a different thread than the one that created it.
         connect_args={"check_same_thread": False},
+        # SQLAlchemy defaults a file-backed SQLite engine to 5 connections plus
+        # 10 overflow.  FastAPI runs sync endpoints in a 40-slot threadpool, so
+        # a lecture hall submitting at once would put 40 requests against 15
+        # connections: the surplus waits on the pool and, once the wait passes
+        # pool_timeout, fails with "QueuePool limit reached" — a lost response.
+        # Sizing the pool to the threadpool means a request never queues here.
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
         future=True,
     )
 

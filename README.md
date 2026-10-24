@@ -1,83 +1,112 @@
 # HGSFP Umfrage-Dashboard
 
-Web-Dashboard für die Feedback-Umfragen der Heidelberg Physics Graduate Days:
-Umfragen anlegen und bearbeiten, per Link und QR-Code verteilen, anonym ausfüllen lassen und
-auswerten — Vorschau im Browser, Export als PDF.
+Analysis dashboard for SurveyJS feedback exports from the Heidelberg Physics Graduate Days.
+Import a JSON result file, review the analysis in the browser, and export reports as PDFs.
 
 Die Rechenkerne stammen aus [hgsfp-survey-tool](https://github.com/hwbuehler/hgsfp-survey-tool);
 die Zahlen sind gegen das dortige Original getestet (`tests/test_analysis.py`).
 
 | Bereich | Sprache |
 |---|---|
-| Dashboard / Editor | Deutsch |
-| Teilnehmer-Formular | Englisch |
+| Dashboard | Englisch |
 | Reports | Englisch |
 
 ---
 
-## Schnellstart
+## Run locally on macOS
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+The steps below use `uv` to install Python 3.13 into uv's managed tool directory and to create
+the project environment. Homebrew supplies `uv` and the native Pango and libffi libraries needed
+by WeasyPrint; Python packages stay inside `.venv`.
 
-Copy-Item .env.example .env      # SECRET_KEY eintragen, siehe unten
-alembic upgrade head
-python scripts\bootstrap_template.py    # Vorlage aus reference/surveyjs-original.json
-python scripts\fetch_model.py           # Clustering-Modell bereitstellen
-python scripts\create_user.py --username admin
+1. Install [Homebrew](https://brew.sh/) if it is not already installed, then install `uv` and
+   WeasyPrint's native macOS libraries:
 
+   ```bash
+   brew install uv pango libffi
+   ```
+
+2. From the project directory, install Python 3.13 with `uv`, create the local virtual
+   environment, and sync the Python packages listed in `requirements.txt`:
+
+   ```bash
+   uv python install 3.13
+   uv venv --python 3.13
+   source .venv/bin/activate
+   uv pip sync requirements.txt
+   ```
+
+   The Python interpreter and installed packages are managed separately from macOS's system
+   Python. Re-run `uv pip sync requirements.txt` after changing dependencies.
+
+3. Create the local environment file and set a session-signing key:
+
+   ```bash
+   cp .env.example .env
+   python -c 'import secrets; print(secrets.token_urlsafe(48))'
+   ```
+
+   Copy the generated value into `HGSFP_SECRET_KEY` in `.env`. Keep `HGSFP_BASE_URL` as
+   `http://127.0.0.1:8000` for local use.
+
+4. Create or update the database schema, download the comment-clustering model, and create a
+   dashboard login:
+
+   ```bash
+   alembic upgrade head
+   python scripts/fetch_model.py
+   python scripts/create_user.py --username admin
+   ```
+
+   The model download is several hundred megabytes and requires an internet connection. The
+   script saves it under `models/all-MiniLM-L6-v2`; repeat the command after deleting that folder
+   if you need to download it again.
+
+5. Start the dashboard:
+
+   ```bash
+   export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
+   uvicorn app.main:app --reload
+   ```
+
+   Open <http://127.0.0.1:8000/dashboard> and sign in with the account created above. Upload a
+   SurveyJS results JSON file to begin.
+
+**Run one worker only.** SQLite has one writer and the analysis job cache is in-process. For
+local development, `--reload` is fine; do not add multiple Uvicorn workers.
+
+### macOS PDF troubleshooting
+
+The startup command above exposes Homebrew's library directory to the app process. If PDF export
+reports that a native library cannot be loaded, run it again from the same Terminal session after
+setting that path:
+
+```bash
+export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
 uvicorn app.main:app --reload
 ```
 
-Dashboard: <http://127.0.0.1:8000/dashboard>
-
-Einen Schlüssel für `.env` erzeugen:
-
-```powershell
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-**Immer nur ein Worker.** SQLite hat genau einen Schreiber, und der Analyse-Cache liegt im Prozess.
-Bei 300 Teilnehmer:innen ist das kein Engpass — gemessen 300 gleichzeitige Abgaben in unter
-einer Sekunde (`scripts/load_test.py`).
+Homebrew's default prefix is `/opt/homebrew` on Apple Silicon and `/usr/local` on Intel Macs.
+The Homebrew prefix lookup keeps the command correct for either architecture.
 
 ---
 
-## Ablauf einer Umfrage
+## Analysis workflow
 
-1. **Anlegen** — im Dashboard Titel eingeben und Vorlage wählen. Die Zeitfenster kommen aus der
-   Vorlage, je Zeitfenster **eine Beispiel-Vorlesung** als Vorlage zum Überschreiben — nicht die
-   komplette Aufstellung des letzten Durchgangs, die man sonst erst löschen müsste.
-   Alternativ direkt **aus einer früheren Ergebnisdatei**:
-   Umfrage, Antworten und Vorlesungsliste entstehen in einem Schritt, die Umfrage wird als
-   *geschlossen* angelegt (Archivdaten nehmen keine neuen Antworten an).
-2. **Bearbeiten** (`/surveys/{id}/edit`) — Titel anpassen, Vorlesungen eintragen. Jede Vorlesung
-   hat einen **Titel** (was Teilnehmende im Menü lesen) und einen **Schlüssel** (was in der
-   Ergebnisdatei landet, z. B. der Nachname). „did not attend“ wird automatisch ergänzt.
-   Titel und Schlüssel sind direkt in der Liste bearbeitbar — kein Löschen und Neuanlegen.
-   Eingaben werden 1,5 s nach der letzten Änderung automatisch gespeichert; jede Speicherung
-   bestätigt mit Uhrzeit, neu angelegte Zeilen werden kurz hervorgehoben.
+1. Open the dashboard and upload a SurveyJS JSON result export. The analysis name is optional;
+   when omitted, the uploaded filename is used.
+2. The importer discovers fields ending in `_title`, including new course prefixes such as
+   `sc_`, and stores each discovered result set for analysis.
+3. Add a lecturer name and lecture title for each imported result key. Skill-course exports may
+   identify one lecturer with multiple values (for example, `Pauline Gagnon 1` and
+   `Pauline Gagnon 2`); give both rows the same lecturer name and enter each course title.
+4. Start analysis to calculate statistics and group comments. Open report previews or download
+   the full report. Skill-course PDF exports combine all course sections for each lecturer into
+   one PDF; the reports ZIP follows the same grouping.
 
-   **Schlüssel ändern:** der Schlüssel steht auch in jeder bereits abgegebenen Antwort. Wird er
-   geändert, stellt das Dashboard diese Antworten mit um und nennt die Anzahl in der Bestätigung —
-   sonst erschiene die Vorlesung in der Auswertung unter einem Namen, den es im Editor nicht mehr
-   gibt. Eine bereits gelaufene Analyse wird dadurch veraltet; die Auswertungsseite weist darauf
-   hin und bietet „Analyse neu berechnen“ an.
-3. **Prüfen** — veröffentlichen lässt sich erst, wenn jedes Zeitfenster mindestens eine Vorlesung
-   hat und keine Schlüssel doppelt vorkommen; der Editor listet offene Punkte auf.
-4. **Veröffentlichen** (`/surveys/{id}/distribute`) — freischalten, Link kopieren, oder die
-   fertige **16:9-Einladungsfolie als PDF** herunterladen (Logo, Hinweistext, QR-Code, Link) und
-   am Ende der Vorlesung projizieren. Der reine QR-Code bleibt zusätzlich als PNG verfügbar.
-5. **Schließen**, sobald genug Antworten da sind.
-6. **Auswerten** (`/surveys/{id}/report`) — „Analyse starten“, dann Vorschau je Vorlesung und
-   Export als Einzel-PDF oder ZIP.
-
-Die Startseite führt zu jeder Umfrage Erstellung, letzte Bearbeitung, Veröffentlichung und
-Schließung auf (UTC), damit der zeitliche Ablauf ohne Nachschlagen erkennbar ist.
-
-Weitere Ergebnisdateien lassen sich zu einer bestehenden Umfrage unter *Daten* nachimportieren.
+For skill courses, `sc_title` is the imported result key. The dashboard lets you assign a
+display lecturer name and course title to each distinct key. Each course retains its own
+statistics, and courses assigned to the same lecturer are bundled into one PDF.
 
 ### Kommentare im Report
 
@@ -99,13 +128,12 @@ app/
   security.py      argon2-Hashing, Cookie-Session
   blueprint.py     SurveyJS-Original -> wiederverwendbare Blaupause
   slide.py         16:9-Einladungsfolie als PDF (fpdf2)
-  surveyjs.py      Blaupause + Slots -> fertige SurveyJS-Definition; Antwort-Validierung
-  routers/         auth · dashboard · editor · distribution · participation · reports
+  routers/         auth · dashboard · reports
   analysis/        Portierung aus hgsfp-survey-tool, siehe unten
   templates/       Jinja2 (Dashboard deutsch, Formular und Report englisch)
-  static/          CSS, htmx, self-gehostete SurveyJS-Runtime, Logo
+  static/          CSS, htmx, Report-Assets
 reference/         Original-Fragebogen und Beispiel-Ergebnisse
-scripts/           bootstrap_template · create_user · fetch_model · load_test
+scripts/           create_user · fetch_model · verify_pdf
 deploy/            Dockerfile, docker-compose.yml, Caddyfile
 ```
 
@@ -193,35 +221,10 @@ Auseinanderlaufen ist damit ausgeschlossen.
 
 ---
 
-### Einladungsfolie
+## PDF export
 
-`app/slide.py` erzeugt die Folie mit **fpdf2**, nicht mit WeasyPrint. Die Folie soll kurz vor
-einer Vorlesung auf einem beliebigen Laptop entstehen können; WeasyPrint braucht dafür Pango und
-cairo, die unter Windows nicht per `pip` kommen (siehe unten). fpdf2 ist reines Python und
-zeichnet ein festes Layout wie dieses ohne Hilfe. Das Logo wird als SVG eingebettet, bleibt also
-vektoriell.
-
-Die Kern-PDF-Schriften können nur Latin-1. Umlaute sind abgedeckt, typografische Zeichen wie „—"
-nicht — `_latin1()` ersetzt sie, damit ein Gedankenstrich im Titel den Download nicht abbricht.
-
----
-
-## PDF-Export unter Windows
-
-WeasyPrint braucht Pango, cairo und gdk-pixbuf. Diese Bibliotheken lassen sich nicht per `pip`
-installieren, weshalb der Export auf einem frischen Windows-Rechner mit einer Meldung
-fehlschlägt statt zu funktionieren. Analyse und Browser-Vorschau laufen davon unberührt weiter.
-
-Drei Wege:
-
-1. **Im Browser drucken** — kein Setup nötig. Die Vorschau hat oben rechts
-   „Drucken / Als PDF speichern“; das Ergebnis nutzt dieselben `@page`-Regeln wie der
-   Server-Export.
-2. **GTK-Runtime installieren** — für den serverseitigen Export und den ZIP-Download lokal:
-   [GTK-for-Windows-Runtime-Environment-Installer](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases),
-   danach die Shell neu öffnen.
-3. **Im Container** — das Image unter `deploy/` bringt die Bibliotheken mit, sodass in der
-   Produktion nichts weiter zu tun ist.
+Server-side PDF export uses the WeasyPrint Python package from `.venv` and Homebrew's Pango and
+libffi native libraries. Browser previews also offer print-to-PDF and use the same report styles.
 
 Ob der Export auf einer Maschine funktioniert, prüft `scripts/verify_pdf.py`: es rendert alle
 Report-Abschnitte aus `reference/sample-survey-results.json` einzeln und als ZIP, ohne Server
@@ -251,6 +254,12 @@ Die Umsetzung folgt der Vorgabe, dass Antworten anonym sind:
 - **Löschung.** Unter *Daten* lassen sich einzeln die Antworten oder die gesamte Umfrage samt
   Auswertungen entfernen.
 - **Passwörter** werden mit argon2 gehasht.
+- **Obergrenzen für Eingaben.** Die öffentliche Abgabe-Route nimmt JSON von jeder Person mit dem
+  Link entgegen, deshalb ist jede Eingabe begrenzt: Request-Body (`HGSFP_MAX_SUBMISSION_BYTES`,
+  256 kB), Länge eines Freitextfeldes (`HGSFP_MAX_FREE_TEXT_CHARS`, 5000 Zeichen, wird gekürzt
+  statt abgelehnt) und Upload-Größe beim Import (`HGSFP_MAX_UPLOAD_BYTES`, 25 MB). Ohne diese
+  Grenzen kann eine einzige Anfrage die Datenbank beliebig groß machen — und das Clustering
+  versucht anschließend, den Text einzubetten.
 - **TLS** übernimmt der Reverse Proxy; die `Caddyfile` setzt HSTS und eine restriktive CSP und
   filtert IP-Adressen aus dem Zugriffsprotokoll.
 
@@ -260,7 +269,7 @@ Der Import alter Ergebnisdateien verwirft `HappendAt` und `InstanceId`.
 
 ## Tests
 
-```powershell
+```bash
 pytest
 ```
 
@@ -272,8 +281,8 @@ pytest
 
 Lasttest gegen einen laufenden Server:
 
-```powershell
-python scripts\load_test.py http://127.0.0.1:8000/s/<token> --count 300
+```bash
+python scripts/load_test.py http://127.0.0.1:8000/s/<token> --count 300
 ```
 
 ---
@@ -285,7 +294,6 @@ cp deploy/.env.example deploy/.env    # SECRET_KEY, SITE_ADDRESS, BASE_URL eintr
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 
 docker compose -f deploy/docker-compose.yml exec app python scripts/fetch_model.py
-docker compose -f deploy/docker-compose.yml exec app python scripts/bootstrap_template.py
 docker compose -f deploy/docker-compose.yml exec -it app python scripts/create_user.py --username admin
 ```
 

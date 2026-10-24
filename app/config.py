@@ -40,6 +40,36 @@ class Settings(BaseSettings):
     topic_cluster_distance: float = 0.30
     topic_split_similarity_threshold: float = 0.2
 
+    # --- Limits -----------------------------------------------------------
+    #
+    # The public submission endpoint takes JSON from anyone holding the link,
+    # so every input it accepts needs a ceiling.  Without one, a single request
+    # can put an arbitrarily large string into the database, and the clustering
+    # step then tries to embed it.
+    #
+    # A completed questionnaire with every free-text field filled is a few kB;
+    # 256 kB leaves room for long answers and still rejects abuse outright.
+    max_submission_bytes: int = 256 * 1024
+    # Longest free-text answer kept.  Anything past this is truncated, not
+    # rejected: a participant who pasted too much should still have their
+    # ratings recorded.
+    max_free_text_chars: int = 5_000
+
+    # Legacy result files are uploaded by logged-in staff, so the ceiling is
+    # generous — it exists to bound memory, not to police colleagues.
+    max_upload_bytes: int = 25 * 1024 * 1024
+
+    # Agglomerative clustering builds an n x n distance matrix, so the memory
+    # it needs grows with the square of the input.  10k items is ~800 MB and
+    # already far beyond any real Graduate Days run.
+    max_cluster_items: int = 10_000
+
+    # SQLAlchemy's default pool (5 + 10 overflow) is smaller than the thread
+    # pool FastAPI runs sync endpoints in (40), so a burst of submissions would
+    # queue on the connection pool and eventually raise. Sized to match.
+    db_pool_size: int = 20
+    db_max_overflow: int = 20
+
     @property
     def database_file(self) -> Path:
         path = self.database_path

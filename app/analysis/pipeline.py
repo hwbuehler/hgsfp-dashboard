@@ -33,14 +33,23 @@ def slot_configs(survey: Survey) -> list[SlotConfig]:
             page_title=slot.page_title,
             dna_value=slot.dna_value,
             choice_texts={c.value: c.text for c in slot.choices},
+            lecturer_names={
+                c.value: c.lecturer_name or c.value for c in slot.choices
+            },
         )
         for slot in sorted(survey.slots, key=lambda s: s.position)
     ]
 
 
-def build_context(survey: Survey, payloads: list[dict]) -> ReportContext:
-    """Compute a full report context.  Runs the model; call off the request path."""
-    slots = slot_configs(survey)
+def build_context(
+    survey_title: str, slots: list[SlotConfig], payloads: list[dict]
+) -> ReportContext:
+    """Compute a full report context.  Runs the model; call off the request path.
+
+    Takes a title and plain slot configs rather than a ``Survey`` so it touches
+    no ORM object: the caller can close its database transaction before the
+    minute of model work starts.
+    """
     aggregated = aggregate(payloads, slots)
     sections = build_sections(aggregated, slots)
 
@@ -59,7 +68,7 @@ def build_context(survey: Survey, payloads: list[dict]) -> ReportContext:
         topics = ClusteredComments(raw=aggregated.topics, clustered=[])
 
     return ReportContext(
-        survey_title=survey.title,
+        survey_title=survey_title,
         total_responses=aggregated.total_responses,
         sections=sections,
         organization=organization,
@@ -88,18 +97,32 @@ def run_analysis(survey_id: int, run_id: int, session_factory) -> None:
                     select(Response.payload_json).where(Response.survey_id == survey_id)
                 )
             )
-            context = build_context(survey, payloads)
+            title = survey.title
+            slots = slot_configs(survey)
+            # Everything the model needs is now plain Python.  Ending the
+            # transaction here matters in WAL mode: an open read transaction
+            # pins the WAL file, so leaving one open for the minute or so the
+            # sentence-transformer runs makes the WAL grow with every response
+            # submitted meanwhile, and it is never checkpointed back.
+            session.commit()
+
+            context = build_context(title, slots, payloads)
             run.result_json = context.to_dict()
             run.response_count = len(payloads)
             run.status = AnalysisStatus.done
             run.error_message = None
         except Exception as exc:  # noqa: BLE001 — surfaced to the dashboard
             logger.exception("Analysis failed for survey %s", survey_id)
+            session.rollback()
+            run = session.get(AnalysisRun, run_id)
+            if run is None:
+                return
             run.status = AnalysisStatus.failed
             run.error_message = f"{type(exc).__name__}: {exc}"
         finally:
-            run.finished_at = utcnow()
-            session.commit()
+            if run is not None:
+                run.finished_at = utcnow()
+                session.commit()
 
 
 def latest_run(session: Session, survey_id: int) -> AnalysisRun | None:

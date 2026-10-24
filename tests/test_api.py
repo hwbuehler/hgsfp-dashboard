@@ -705,3 +705,181 @@ def test_empty_title_is_refused_with_a_sentence(auth_client, survey):
     )
     assert response.status_code == 200
     assert "is-error" in response.text
+
+
+# --- Load behaviour and input limits ------------------------------------------
+
+
+def test_malformed_json_is_a_bad_request_not_a_crash(auth_client, survey):
+    """A decode error used to escape as a 500, losing the answer silently."""
+    survey_id, token = survey
+    auth_client.post(f"/surveys/{survey_id}/publish")
+
+    response = auth_client.post(
+        f"/s/{token}/responses",
+        content=b"not json at all",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]
+
+
+def test_oversized_submission_is_refused(auth_client, survey, session_factory):
+    """One request must not be able to write an unbounded blob to the database."""
+    survey_id, token = survey
+    auth_client.post(f"/surveys/{survey_id}/publish")
+
+    from app.config import settings
+
+    huge = "x" * (settings.max_submission_bytes + 1024)
+    response = auth_client.post(
+        f"/s/{token}/responses", json={"ml_title": "DnA", "sugg_topics": huge}
+    )
+    assert response.status_code == 413
+    with session_factory() as session:
+        assert session.scalars(select(ResponseRow)).all() == []
+
+
+def test_long_free_text_is_truncated_not_dropped(auth_client, survey, session_factory):
+    """A participant who pastes too much still gets their ratings counted."""
+    survey_id, token = survey
+    auth_client.post(f"/surveys/{survey_id}/publish")
+
+    from app.config import settings
+
+    long_text = "y" * (settings.max_free_text_chars * 2)
+    response = auth_client.post(
+        f"/s/{token}/responses",
+        json={
+            "ml_title": seeded_lecture(session_factory, survey_id),
+            "ml_interesting": 4,
+            "sugg_topics": long_text,
+        },
+    )
+    assert response.status_code == 200
+
+    with session_factory() as session:
+        payload = session.scalars(select(ResponseRow)).one().payload_json
+        assert len(payload["sugg_topics"]) == settings.max_free_text_chars
+        assert payload["ml_interesting"] == 4
+
+
+def test_oversized_import_is_refused(auth_client, survey):
+    survey_id, _ = survey
+    from app.config import settings
+
+    blob = b"x" * (settings.max_upload_bytes + 1024)
+    response = auth_client.post(
+        f"/surveys/{survey_id}/import",
+        files={"file": ("huge.json", blob, "application/json")},
+    )
+    assert response.status_code == 413
+
+
+def test_submitting_loads_the_survey_in_one_query(auth_client, survey, session_factory):
+    """Lazy loading cost one query per slot, exactly when the hall submits at once."""
+    from sqlalchemy import event
+
+    survey_id, token = survey
+    auth_client.post(f"/surveys/{survey_id}/publish")
+
+    engine = session_factory.kw["bind"]
+    seen: list[str] = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _count(conn, cursor, statement, params, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            seen.append(statement)
+
+    try:
+        response = auth_client.post(
+            f"/s/{token}/responses",
+            json={"ml_title": "DnA", "al_title": "DnA", "il_title": "DnA"},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", _count)
+
+    assert response.status_code == 200
+    # One for the survey, one for its slots, one for all choices at once.
+    assert len(seen) <= 3, f"expected a bounded number of SELECTs, got {len(seen)}"
+
+
+def test_concurrent_submissions_all_land(auth_client, survey, session_factory):
+    """The burst a lecture hall produces must not drop or corrupt responses."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    survey_id, token = survey
+    auth_client.post(f"/surveys/{survey_id}/publish")
+    lecture = seeded_lecture(session_factory, survey_id)
+
+    def submit(n: int) -> int:
+        return auth_client.post(
+            f"/s/{token}/responses",
+            json={"ml_title": lecture, "ml_interesting": (n % 5) + 1},
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        codes = list(pool.map(submit, range(40)))
+
+    assert codes == [200] * 40
+    with session_factory() as session:
+        assert len(session.scalars(select(ResponseRow)).all()) == 40
+
+
+def test_analysis_job_completes_and_releases_its_transaction(survey, session_factory):
+    """The job must finish, and must not hold a read transaction while it runs.
+
+    In WAL mode an open read transaction pins the WAL file, so one left open for
+    the length of a model run makes the WAL grow with every response submitted
+    meanwhile and never checkpoints it back.
+    """
+    from app.analysis.pipeline import run_analysis
+    from app.models import AnalysisRun, AnalysisStatus
+
+    survey_id, _ = survey
+    raw = (PROJECT_ROOT / "reference" / "sample-survey-results.json").read_bytes()
+    with session_factory() as session:
+        from app.analysis.legacy_import import import_into
+
+        import_into(session, session.get(Survey, survey_id), raw)
+
+        run = AnalysisRun(survey_id=survey_id, status=AnalysisStatus.pending)
+        session.add(run)
+        session.commit()
+        run_id = run.id
+
+    run_analysis(survey_id, run_id, session_factory)
+
+    with session_factory() as session:
+        finished = session.get(AnalysisRun, run_id)
+        assert finished.status is AnalysisStatus.done, finished.error_message
+        assert finished.response_count == 111
+        assert finished.result_json
+        assert finished.finished_at is not None
+
+
+def test_analysis_job_records_a_failure(survey, session_factory, monkeypatch):
+    """A crash in the model must land in the dashboard, not vanish."""
+    from app.analysis import pipeline
+    from app.models import AnalysisRun, AnalysisStatus
+
+    survey_id, _ = survey
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("model exploded")
+
+    monkeypatch.setattr(pipeline, "build_context", boom)
+
+    with session_factory() as session:
+        run = AnalysisRun(survey_id=survey_id, status=AnalysisStatus.pending)
+        session.add(run)
+        session.commit()
+        run_id = run.id
+
+    pipeline.run_analysis(survey_id, run_id, session_factory)
+
+    with session_factory() as session:
+        failed = session.get(AnalysisRun, run_id)
+        assert failed.status is AnalysisStatus.failed
+        assert "model exploded" in failed.error_message
+        assert failed.finished_at is not None

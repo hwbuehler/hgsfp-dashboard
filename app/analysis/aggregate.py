@@ -32,6 +32,8 @@ class SlotConfig:
     dna_value: str = "DnA"
     # value -> display text, used to label charts with the full lecture title.
     choice_texts: dict[str, str] = field(default_factory=dict)
+    # value -> lecturer name; the original stored value remains the stable key.
+    lecturer_names: dict[str, str] = field(default_factory=dict)
 
     @property
     def comment_key(self) -> str:

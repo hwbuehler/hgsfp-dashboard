@@ -82,6 +82,7 @@ def report_index(
     request: Request,
     survey_id: int,
     created: int | None = None,
+    details_updated: int | None = None,
     user: User = Depends(require_user),
     session: Session = Depends(get_session),
 ):
@@ -109,6 +110,7 @@ def report_index(
             "run": run,
             "response_count": count or 0,
             "created": created,
+            "details_updated": details_updated,
             "is_stale": is_stale,
         },
     )
@@ -175,7 +177,23 @@ def report_preview(
         sections,
         scope,
         "/static/css/report.css",
-        screen_actions={"pdf_url": f"/surveys/{survey_id}/report/{scope}/pdf"},
+        screen_actions={
+            "pdf_url": f"/surveys/{survey_id}/report/{scope}/pdf",
+            "dashboard_url": "/dashboard",
+            "analysis_url": f"/surveys/{survey_id}/report",
+            "details_url": f"/surveys/{survey_id}/lectures",
+            "report_pages": [
+                {
+                    "url": f"/surveys/{survey_id}/report/{section.scope}",
+                    "label": (
+                        f"{section.title} — {section.subtitle}"
+                        if section.scope.startswith("lecture-") and section.subtitle
+                        else section.title
+                    ),
+                }
+                for section in context.sections
+            ],
+        },
     )
     return HTMLResponse(html)
 
@@ -207,6 +225,37 @@ def report_pdf(
     )
 
 
+@router.get("/surveys/{survey_id}/skill-course-pdf")
+def skill_course_lecturer_pdf(
+    request: Request,
+    survey_id: int,
+    lecturer: str,
+    user: User = Depends(require_user),
+    session: Session = Depends(get_session),
+):
+    """Render every skill-course lecture for one lecturer into one PDF."""
+    survey = get_survey(session, survey_id)
+    context = _require_context(session, survey_id)
+    sections = [
+        section
+        for section in context.sections
+        if section.scope.startswith("lecture-sc-") and section.title == lecturer
+    ]
+    if not sections:
+        raise HTTPException(status_code=404, detail="No skill courses found for this lecturer.")
+    html = _render_document(request, context, sections, "skill-courses", "css/report.css")
+    try:
+        pdf = render_pdf(html, base_url=str(settings.static_dir) + "/")
+    except PdfUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    filename = f"{slugify(survey.title)}-{slugify(lecturer)}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/surveys/{survey_id}/reports.zip")
 def report_zip(
     request: Request,
@@ -219,8 +268,25 @@ def report_zip(
     context = _require_context(session, survey_id)
 
     files: dict[str, bytes] = {}
+    included_skill_lecturers: set[str] = set()
     try:
         for index, section in enumerate(context.sections):
+            if section.scope.startswith("lecture-sc-"):
+                if section.title in included_skill_lecturers:
+                    continue
+                included_skill_lecturers.add(section.title)
+                bundled_sections = [
+                    candidate
+                    for candidate in context.sections
+                    if candidate.scope.startswith("lecture-sc-")
+                    and candidate.title == section.title
+                ]
+                name = f"{index:02d}-skill-courses-{slugify(section.title)}.pdf"
+                html = _render_document(
+                    request, context, bundled_sections, "skill-courses", "css/report.css"
+                )
+                files[name] = render_pdf(html, base_url=str(settings.static_dir) + "/")
+                continue
             html = _render_document(
                 request, context, [section], section.scope, "css/report.css"
             )

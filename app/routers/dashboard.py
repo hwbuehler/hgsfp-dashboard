@@ -10,13 +10,16 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.analysis.legacy_import import (
     ImportError_,
+    derive_slots,
     derive_slot_choices,
     import_into,
     parse_export,
 )
+from app.config import settings
 from app.db import get_session
 from app.models import Response as ResponseRow
 from app.models import (
@@ -64,9 +67,6 @@ def survey_list(
     session: Session = Depends(get_session),
 ):
     surveys = session.scalars(select(Survey).order_by(Survey.id.desc())).all()
-    templates_available = session.scalars(
-        select(SurveyTemplate).order_by(SurveyTemplate.name)
-    ).all()
     return templates.TemplateResponse(
         request,
         "dashboard/list.html",
@@ -74,10 +74,111 @@ def survey_list(
             "user": user,
             "surveys": surveys,
             "counts": response_counts(session),
-            "templates_available": templates_available,
             "created": created,
             "error": error,
         },
+    )
+
+
+@router.post("/imports")
+async def import_analysis_file(
+    title: str = Form(""),
+    file: UploadFile = File(...),
+    user: User = Depends(require_user),
+    session: Session = Depends(get_session),
+):
+    """Create an analysis dataset directly from a SurveyJS result export."""
+    raw = await read_upload(file)
+    try:
+        payloads = parse_export(raw)
+        slots = derive_slots(payloads)
+    except ImportError_ as exc:
+        return RedirectResponse(
+            f"/dashboard?error={quote(str(exc))}", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    clean_title = title.strip() or (file.filename or "Survey results").rsplit(".", 1)[0]
+    survey = Survey(
+        template_id=None,
+        title=clean_title,
+        public_token=secrets.token_urlsafe(12),
+        created_by_id=user.id,
+        status=SurveyStatus.closed,
+        closed_at=utcnow(),
+    )
+    session.add(survey)
+    session.flush()
+    for position, spec in enumerate(slots):
+        slot = SurveySlot(
+            survey_id=survey.id,
+            key_prefix=spec["key_prefix"],
+            page_title=spec["page_title"],
+            position=position,
+        )
+        session.add(slot)
+        session.flush()
+        for choice_position, value in enumerate(spec["choices"]):
+            session.add(SlotChoice(
+                slot_id=slot.id, value=value, text="", position=choice_position
+            ))
+    today = utcnow().date()
+    session.add_all(
+        ResponseRow(survey_id=survey.id, payload_json=payload, submitted_on=today)
+        for payload in payloads
+    )
+    session.commit()
+    return RedirectResponse(
+        f"/surveys/{survey.id}/report?created={len(payloads)}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.get("/surveys/{survey_id}/lectures", response_class=HTMLResponse)
+def lecture_details_page(
+    request: Request,
+    survey_id: int,
+    user: User = Depends(require_user),
+    session: Session = Depends(get_session),
+):
+    survey = get_survey(session, survey_id)
+    return templates.TemplateResponse(
+        request,
+        "dashboard/lectures.html",
+        {"user": user, "survey": survey},
+    )
+
+
+@router.post("/surveys/{survey_id}/lecture-details")
+async def update_lecture_details(
+    request: Request,
+    survey_id: int,
+    user: User = Depends(require_user),
+    session: Session = Depends(get_session),
+):
+    survey = get_survey(session, survey_id)
+    form = await request.form()
+    for slot in survey.slots:
+        for choice in slot.choices:
+            lecturer = str(form.get(f"lecturer_{choice.id}", "")).strip()
+            title = str(form.get(f"title_{choice.id}", "")).strip()
+            if not lecturer or not title:
+                return templates.TemplateResponse(
+                    request,
+                    "dashboard/lectures.html",
+                    {
+                        "user": user,
+                        "survey": survey,
+                        "error": "Enter both a lecturer name and lecture title for every row.",
+                    },
+                    status_code=422,
+                )
+            choice.lecturer_name = lecturer
+            choice.text = title
+    survey.updated_at = utcnow()
+    session.commit()
+    return RedirectResponse(
+        f"/surveys/{survey.id}/report?details_updated=1",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
@@ -92,6 +193,28 @@ def title_taken(session: Session, title: str, exclude_id: int | None = None) -> 
     if exclude_id is not None:
         statement = statement.where(Survey.id != exclude_id)
     return session.scalars(statement).first() is not None
+
+
+async def read_upload(file: UploadFile) -> bytes:
+    """Read an uploaded file into memory, refusing anything oversized.
+
+    ``UploadFile.read()`` with no argument is unbounded: the file is buffered to
+    disk by Starlette and then pulled into RAM in full.  A result export is well
+    under a megabyte, so a ceiling costs nothing and keeps a mistyped upload
+    from taking the process down.
+    """
+    limit = settings.max_upload_bytes
+    chunks: list[bytes] = []
+    received = 0
+    while chunk := await file.read(64 * 1024):
+        received += len(chunk)
+        if received > limit:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Die Datei ist größer als {limit // (1024 * 1024)} MB.",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 DUPLICATE_TITLE_MESSAGE = (
@@ -205,37 +328,45 @@ async def create_survey_from_file(
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    raw = await file.read()
-    try:
+    raw = await read_upload(file)
+
+    # Parsing a result file and writing a few hundred rows is all blocking
+    # work.  Run in the threadpool so an import started mid-collection cannot
+    # stall participants submitting at the same time.
+    def build() -> tuple[int, int]:
         payloads = parse_export(raw)
+        prefixes = [s["key_prefix"] for s in template.blueprint_json.get("slots", [])]
+        survey = Survey(
+            template_id=template.id,
+            title=clean_title,
+            public_token=secrets.token_urlsafe(12),
+            created_by_id=user.id,
+            # Archived data is not open for new responses.
+            status=SurveyStatus.closed,
+            closed_at=utcnow(),
+        )
+        session.add(survey)
+        session.flush()
+        seed_slots(session, survey, template, derive_slot_choices(payloads, prefixes))
+
+        today = utcnow().date()
+        session.add_all(
+            ResponseRow(survey_id=survey.id, payload_json=payload, submitted_on=today)
+            for payload in payloads
+        )
+        session.commit()
+        return survey.id, len(payloads)
+
+    try:
+        survey_id, imported = await run_in_threadpool(build)
     except ImportError_ as exc:
+        session.rollback()
         return RedirectResponse(
             f"/dashboard?error={quote(str(exc))}", status_code=status.HTTP_303_SEE_OTHER
         )
 
-    prefixes = [s["key_prefix"] for s in template.blueprint_json.get("slots", [])]
-    survey = Survey(
-        template_id=template.id,
-        title=clean_title,
-        public_token=secrets.token_urlsafe(12),
-        created_by_id=user.id,
-        # Archived data is not open for new responses.
-        status=SurveyStatus.closed,
-        closed_at=utcnow(),
-    )
-    session.add(survey)
-    session.flush()
-    seed_slots(session, survey, template, derive_slot_choices(payloads, prefixes))
-
-    today = utcnow().date()
-    session.add_all(
-        ResponseRow(survey_id=survey.id, payload_json=payload, submitted_on=today)
-        for payload in payloads
-    )
-    session.commit()
-
     return RedirectResponse(
-        f"/surveys/{survey.id}/report?created={len(payloads)}",
+        f"/surveys/{survey_id}/report?created={imported}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -307,12 +438,14 @@ async def import_responses(
     session: Session = Depends(get_session),
 ):
     survey = get_survey(session, survey_id)
-    raw = await file.read()
+    raw = await read_upload(file)
     try:
-        count = import_into(session, survey, raw)
+        count = await run_in_threadpool(import_into, session, survey, raw)
     except ImportError_ as exc:
+        session.rollback()
         return RedirectResponse(
-            f"/surveys/{survey_id}/data?error={exc}", status_code=status.HTTP_303_SEE_OTHER
+            f"/surveys/{survey_id}/data?error={quote(str(exc))}",
+            status_code=status.HTTP_303_SEE_OTHER,
         )
     return RedirectResponse(
         f"/surveys/{survey_id}/data?imported={count}", status_code=status.HTTP_303_SEE_OTHER

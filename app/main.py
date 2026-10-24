@@ -17,7 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.db import engine
 from app.models import Base
-from app.routers import auth, dashboard, distribution, editor, participation, reports
+from app.routers import auth, dashboard, reports
 from app.security import NotAuthenticated, redirect_to_login
 from app.templating import templates
 
@@ -51,10 +51,7 @@ app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="stat
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
-app.include_router(editor.router)
-app.include_router(distribution.router)
 app.include_router(reports.router)
-app.include_router(participation.router)
 
 
 @app.exception_handler(NotAuthenticated)

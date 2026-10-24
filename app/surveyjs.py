@@ -12,6 +12,7 @@ import copy
 from typing import Any
 
 from app.blueprint import LECTURE_COMMENTS_QUESTION, PLACEHOLDER
+from app.config import settings
 from app.models import Survey, SurveySlot
 
 
@@ -109,6 +110,23 @@ RATING_KEYS = ("interesting", "new", "expected", "exciting", "structure", "level
 FREE_TEXT_KEYS = ("sugg_organization", "sugg_topics")
 
 
+def _clean_free_text(value: Any) -> str | None:
+    """Normalise one free-text answer, or None if there is nothing to keep.
+
+    The length cap is what stops a single submission from putting a megabyte
+    into the database — and, worse, into the clustering step, which splits topic
+    suggestions on commas and embeds every part.  Truncating rather than
+    rejecting keeps the rest of the response: someone who pasted half a document
+    into the suggestions box still gets their ratings counted.
+    """
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    return stripped[: settings.max_free_text_chars]
+
+
 def validate_payload(survey: Survey, payload: dict[str, Any]) -> dict[str, Any]:
     """Reduce a submitted SurveyJS result to the fields we expect and trust.
 
@@ -149,17 +167,19 @@ def validate_payload(survey: Survey, payload: dict[str, Any]) -> dict[str, Any]:
     comments = payload.get(LECTURE_COMMENTS_QUESTION)
     if isinstance(comments, dict):
         allowed_items = {slot.comment_item_name for slot in survey.slots}
-        kept = {
-            name: str(text)
-            for name, text in comments.items()
-            if name in allowed_items and isinstance(text, str) and text.strip()
-        }
+        kept: dict[str, str] = {}
+        for name, raw_text in comments.items():
+            if name not in allowed_items:
+                continue
+            text = _clean_free_text(raw_text)
+            if text is not None:
+                kept[name] = text
         if kept:
             cleaned[LECTURE_COMMENTS_QUESTION] = kept
 
     for key in FREE_TEXT_KEYS:
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
+        value = _clean_free_text(payload.get(key))
+        if value is not None:
             cleaned[key] = value
 
     if not cleaned:

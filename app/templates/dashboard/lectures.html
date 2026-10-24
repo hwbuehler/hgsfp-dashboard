@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Lecture details — {{ survey.title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="kicker" href="/surveys/{{ survey.id }}/report">← {{ survey.title }}</a>
+    <h1>Lecturer names and lecture titles</h1>
+    <p class="section-note">For skill courses, set the same lecturer name on every course they taught. Each course keeps its own title and report section.</p>
+  </div>
+</div>
+
+{% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}
+
+<form method="post" action="/surveys/{{ survey.id }}/lecture-details">
+  {% for slot in survey.slots %}
+    {% if slot.choices %}
+      <section style="margin: 28px 0">
+        <h2>{{ slot.page_title }}</h2>
+        <table class="data">
+          <thead><tr><th style="width: 38%">Survey result key</th><th>Lecturer name</th><th>Lecture title</th></tr></thead>
+          <tbody>
+            {% for choice in slot.choices %}
+              <tr>
+                <td>{{ choice.value }}</td>
+                <td><input type="text" name="lecturer_{{ choice.id }}" value="{{ choice.lecturer_name or choice.value }}" required></td>
+                <td><input type="text" name="title_{{ choice.id }}" value="{{ choice.text or '' }}" placeholder="Enter the lecture title" required></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
+  {% endfor %}
+  <div class="button-row">
+    <button type="submit">Save lecture details</button>
+    <a class="button button-secondary" href="/surveys/{{ survey.id }}/report">Cancel</a>
+  </div>
+</form>
+{% endblock %}

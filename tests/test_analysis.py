@@ -16,9 +16,21 @@ from app.analysis.aggregate import aggregate, is_meaningful_comment
 from app.analysis.constants import CONSTANTS
 from app.analysis.statistics import compute_stats
 
-GOLDEN = json.loads(
-    (Path(__file__).parent / "data" / "golden_statistics.json").read_text(encoding="utf-8")
-)
+GOLDEN_PATH = Path(__file__).parent / "data" / "golden_statistics.json"
+
+if not GOLDEN_PATH.exists():
+    # The fixture is the *original tool's* output, so it cannot be regenerated
+    # from this code — doing so would make these tests assert that the port
+    # matches itself.  Skip the module instead of failing at import time, which
+    # would abort collection and take the whole suite down with it.
+    pytest.skip(
+        f"{GOLDEN_PATH.relative_to(Path(__file__).parent.parent)} is missing — "
+        "produce it by running hgsfp-survey-tool/survey_analyzer.py against "
+        "reference/sample-survey-results.json.",
+        allow_module_level=True,
+    )
+
+GOLDEN = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
 
 
 def _stats_by_question(results):

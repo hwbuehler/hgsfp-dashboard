@@ -1,177 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Umfragen — HGSFP{% endblock %}
-
-{% set status_labels = {'draft': 'Entwurf', 'published': 'Veröffentlicht', 'closed': 'Geschlossen'} %}
-
-{% macro when(value) %}
-  {%- if value %}{{ value.strftime('%d.%m.%Y %H:%M') }}{% else %}<span class="muted">—</span>{% endif -%}
-{% endmacro %}
-
+{% block title %}Analyse — HGSFP{% endblock %}
 {% block content %}
-{% set published_count = surveys | selectattr('status.value', 'equalto', 'published') | list | length %}
-
 <div class="page-head">
-  <div>
-    <span class="kicker">Übersicht</span>
-    <h1>Umfragen</h1>
-  </div>
+  <div><span class="kicker">HGSFP</span><h1>Survey analysis</h1></div>
 </div>
 
-<div class="stat-row">
-  <div class="stat">
-    <div class="stat-value">{{ surveys | length }}</div>
-    <div class="stat-label">Umfragen</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value stat-accent">{{ published_count }}</div>
-    <div class="stat-label">Veröffentlicht</div>
-  </div>
-</div>
-
-{% if error %}<div class="notice notice-error" style="margin-top: 24px">{{ error }}</div>{% endif %}
-{% if created %}
-  <div class="notice notice-ok" style="margin-top: 24px">
-    Umfrage aus der Datei angelegt: {{ created }} Antworten importiert,
-    Auswahllisten aus den Daten übernommen.
-  </div>
-{% endif %}
-
-{% if templates_available %}
-  {# One panel with two modes, instead of two stacked forms competing for
-     attention. Permanently visible: creating a survey is the reason to be on
-     this page, so it should not hide behind a button. #}
-  <div class="panel" id="create-panel">
-    <div class="page-head" style="border: none; padding: 0; margin-bottom: 20px; align-items: flex-start">
-      <div>
-        <h2>Neue Umfrage anlegen</h2>
-        <p class="section-note">
-          Zeitfenster und Auswahllisten werden aus der Vorlage übernommen und lassen sich
-          anschließend im Editor anpassen.
-        </p>
+{% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}
+<div class="panel">
+  <h2>Import SurveyJS results</h2>
+  <p class="section-note">Upload a JSON export. The dashboard detects course fields from the result data, including skill courses.</p>
+  <form method="post" action="/imports" enctype="multipart/form-data">
+    <div class="field-row">
+      <div class="field">
+        <label for="title">Analysis name <span class="hint">optional; defaults to filename</span></label>
+        <input type="text" id="title" name="title" placeholder="e.g. Graduate Days 2026">
       </div>
-      <div class="button-row">
-        <button type="button" class="button-secondary" data-create-mode="template" aria-pressed="true">Aus Vorlage</button>
-        <button type="button" class="button-secondary" data-create-mode="file" aria-pressed="false">Aus Ergebnisdatei</button>
+      <div class="field">
+        <label for="results_file">SurveyJS result file (JSON)</label>
+        <input type="file" id="results_file" name="file" accept="application/json,.json" required>
       </div>
+      <button type="submit">Import and analyse</button>
     </div>
-
-    <form method="post" action="/surveys" data-create-form="template">
-      <div class="field-row">
-        <div class="field">
-          <label for="title">Titel <span class="hint">— sehen die Teilnehmer:innen</span></label>
-          <input type="text" id="title" name="title" required
-                 placeholder="z. B. Questionnaire for the 57th Heidelberg Physics Graduate Days">
-        </div>
-        <div class="field">
-          <label for="template_id">Vorlage</label>
-          <select id="template_id" name="template_id">
-            {% for template in templates_available %}
-              <option value="{{ template.id }}">{{ template.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <button type="submit">Anlegen</button>
-      </div>
-    </form>
-
-    <form method="post" action="/surveys/from-file" enctype="multipart/form-data"
-          data-create-form="file" hidden>
-      <p class="section-note" style="margin-bottom: 16px">
-        Legt die Umfrage an, liest die Antworten ein und übernimmt die Vorlesungen direkt aus der
-        Datei — der Editor ist damit schon gefüllt und die Auswertung sofort möglich.
-      </p>
-      <div class="field-row">
-        <div class="field">
-          <label for="file_title">Titel</label>
-          <input type="text" id="file_title" name="title" required
-                 placeholder="z. B. 56th Graduate Days (Archiv)">
-        </div>
-        <div class="field">
-          <label for="results_file">Ergebnisdatei (JSON)</label>
-          <input type="file" id="results_file" name="file" accept="application/json,.json" required>
-        </div>
-        <button type="submit">Anlegen &amp; importieren</button>
-      </div>
-      <input type="hidden" name="template_id" value="{{ templates_available[0].id }}">
-    </form>
-  </div>
-{% else %}
-  <div class="notice notice-error" style="margin-top: 24px">
-    Es ist noch keine Vorlage hinterlegt. Einmalig ausführen:
-    <code>python scripts/bootstrap_template.py</code>
-  </div>
-{% endif %}
+  </form>
+</div>
 
 {% if surveys %}
-  <table class="data" style="margin-top: 32px">
-    <thead>
-      <tr>
-        <th style="width: 40%">Titel</th>
-        <th>Status</th>
-        <th class="numeric">Antworten</th>
-        <th>Zuletzt bearbeitet</th>
-        <th>Veröffentlicht</th>
-        <th></th>
-      </tr>
-    </thead>
+  <h2 style="margin-top: 36px">Imported datasets</h2>
+  <table class="data">
+    <thead><tr><th>Analysis</th><th class="numeric">Responses</th><th>Added</th><th></th></tr></thead>
     <tbody>
       {% for survey in surveys %}
-        <tr>
-          <td>
-            <a class="row-title" href="/surveys/{{ survey.id }}/edit">{{ survey.title }}</a>
-            <div class="row-sub">
-              {{ survey.slots | length }} Zeitfenster
-              {%- if survey.created_at %} · angelegt {{ survey.created_at.strftime('%d.%m.%Y') }}{% endif %}
-            </div>
-          </td>
-          <td>
-            <span class="chip chip-{{ survey.status.value }}">{{ status_labels[survey.status.value] }}</span>
-          </td>
-          <td class="numeric">{{ counts.get(survey.id, 0) }}</td>
-          <td class="when">{{ when(survey.updated_at) }}</td>
-          <td class="when">{{ when(survey.published_at) }}</td>
-          <td style="text-align: right">
-            <span class="row-actions">
-              <a class="button button-quiet" href="/surveys/{{ survey.id }}/edit">Öffnen →</a>
-            </span>
-          </td>
-        </tr>
+      <tr>
+        <td><a class="row-title" href="/surveys/{{ survey.id }}/report">{{ survey.title }}</a>
+          <div class="row-sub">{{ survey.slots | length }} course types</div></td>
+        <td class="numeric">{{ counts.get(survey.id, 0) }}</td>
+        <td>{{ survey.created_at.strftime('%d.%m.%Y') if survey.created_at else '—' }}</td>
+        <td style="text-align:right"><a class="button button-quiet" href="/surveys/{{ survey.id }}/report">Open analysis →</a></td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
-  <p class="small muted" style="margin: 12px 0 0">Alle Zeiten in UTC.</p>
 {% else %}
-  <p class="muted" style="margin-top: 32px">Noch keine Umfrage angelegt.</p>
-{% endif %}
-
-{% if templates_available %}
-<script>
-  (function () {
-    var panel = document.getElementById("create-panel");
-    var forms = {
-      template: panel.querySelector('[data-create-form="template"]'),
-      file: panel.querySelector('[data-create-form="file"]')
-    };
-
-    function show(mode, focusFirst) {
-      Object.keys(forms).forEach(function (key) {
-        forms[key].hidden = key !== mode;
-      });
-      panel.querySelectorAll("[data-create-mode]").forEach(function (button) {
-        button.setAttribute("aria-pressed", String(button.dataset.createMode === mode));
-      });
-      if (focusFirst) {
-        var first = forms[mode].querySelector("input");
-        if (first) first.focus();
-      }
-    }
-
-    panel.querySelectorAll("[data-create-mode]").forEach(function (button) {
-      button.addEventListener("click", function () { show(this.dataset.createMode, true); });
-    });
-    // After a failed import, reopen on the mode that failed.
-    show({{ ('file' if error else 'template') | tojson }}, false);
-  })();
-</script>
+  <p class="muted" style="margin-top:32px">No result files imported yet.</p>
 {% endif %}
 {% endblock %}

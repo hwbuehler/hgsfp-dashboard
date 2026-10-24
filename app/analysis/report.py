@@ -176,13 +176,13 @@ def build_sections(
         )
 
         for value, results in sorted(aggregated.by_lecture.get(slot.key_prefix, {}).items()):
+            lecturer = slot.lecturer_names.get(value, value)
+            lecture_title = slot.choice_texts.get(value, slot.page_title)
             sections.append(
                 ReportSection(
                     scope=lecture_scope(slot.key_prefix, value),
-                    title=value,
-                    # The full lecture title is far more informative than the
-                    # speaker key the result JSON stores.
-                    subtitle=slot.choice_texts.get(value, slot.page_title),
+                    title=lecturer,
+                    subtitle=lecture_title,
                     response_count=len(results.get("interesting", [])),
                     dna_count=0,
                     stats=compute_stats(results),
@@ -207,7 +207,7 @@ def build_comment_groups(
     for slot in slots:
         lectures = [
             {
-                "title": value,
+                "title": slot.lecturer_names.get(value, value),
                 "subtitle": slot.choice_texts.get(value, ""),
                 "scope": lecture_scope(slot.key_prefix, value),
                 "comments": list(results.get("comments", [])),
@@ -225,7 +225,11 @@ def build_summary_rows(sections: list[ReportSection]) -> list[dict[str, Any]]:
     """One row per section for the overview table (mean ± std per question)."""
     return [
         {
-            "title": section.title,
+            "title": (
+                f"{section.title} — {section.subtitle}"
+                if section.scope.startswith("lecture-") and section.subtitle
+                else section.title
+            ),
             "scope": section.scope,
             "n": section.response_count,
             "values": [s.formatted() for s in section.stats],
