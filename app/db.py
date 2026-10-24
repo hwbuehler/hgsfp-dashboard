@@ -15,6 +15,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 
+# Starlette's default threadpool size. Sync endpoints — every dashboard route,
+# and the worker half of a submission — run there, so it is also the ceiling on
+# how many requests can want a connection simultaneously.
+THREADPOOL_LIMIT = 40
+
 
 def _build_engine() -> Engine:
     settings.database_file.parent.mkdir(parents=True, exist_ok=True)
@@ -46,7 +51,13 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.execute("PRAGMA foreign_keys=ON")
     # Wait instead of raising "database is locked" when the writer is busy.
-    cursor.execute("PRAGMA busy_timeout=5000")
+    # An outer bound for the pathological case (a checkpoint stalling behind a
+    # slow disk), not an expected wait: writers normally queue for microseconds.
+    # Raised from 5s because a submission that waits has still been recorded,
+    # while one that raises has lost somebody's answers for good. Submissions
+    # are handled off the event loop, so a wait costs one worker thread, not the
+    # whole server.
+    cursor.execute("PRAGMA busy_timeout=15000")
     cursor.close()
 
 

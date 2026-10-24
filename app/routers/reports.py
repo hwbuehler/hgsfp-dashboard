@@ -6,6 +6,8 @@ two representations cannot drift apart.
 
 from __future__ import annotations
 
+import threading
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select
@@ -25,6 +27,14 @@ from app.templating import templates
 
 router = APIRouter(tags=["reports"])
 
+# Guards the check-and-create below. Two clicks on "Auswertung starten" a moment
+# apart both used to pass the "is one already running?" test and queue a job, so
+# the box ended up loading the sentence-transformer twice and running two
+# analyses against each other — while participants may still be submitting.
+# The app runs a single worker by design (see app/main.py), so a process-level
+# lock closes the window completely.
+_start_lock = threading.Lock()
+
 CLUSTER_NOTE = (
     "Grouping uses the all-MiniLM-L6-v2 sentence-transformer model "
     "(https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). "
@@ -41,18 +51,19 @@ def start_analysis(
 ):
     survey = get_survey(session, survey_id)
 
-    running = latest_run(session, survey_id)
-    if running is not None and running.status in (
-        AnalysisStatus.pending,
-        AnalysisStatus.running,
-    ):
-        return RedirectResponse(
-            f"/surveys/{survey_id}/report", status_code=status.HTTP_303_SEE_OTHER
-        )
+    with _start_lock:
+        running = latest_run(session, survey_id)
+        if running is not None and running.status in (
+            AnalysisStatus.pending,
+            AnalysisStatus.running,
+        ):
+            return RedirectResponse(
+                f"/surveys/{survey_id}/report", status_code=status.HTTP_303_SEE_OTHER
+            )
 
-    run = AnalysisRun(survey_id=survey.id, status=AnalysisStatus.pending)
-    session.add(run)
-    session.commit()
+        run = AnalysisRun(survey_id=survey.id, status=AnalysisStatus.pending)
+        session.add(run)
+        session.commit()
 
     # Clustering loads a sentence-transformer and takes seconds; the request
     # must not wait for it.

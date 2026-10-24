@@ -65,26 +65,10 @@ class ClusteredComments:
         return cls(raw=data.get("raw", []), clustered=data.get("clustered", []))
 
 
-def segment_by_semantic_similarity(
-    text: str | list[str], similarity_threshold: float = 0.0
+def _merge_adjacent(
+    sentences: list[str], embeddings, similarity_threshold: float
 ) -> list[str]:
-    """Split text into semantically distinct units.
-
-    Accepts a plain string (split on sentence boundaries) or an already-split
-    list, e.g. the comma-separated parts of a topic suggestion.  Adjacent parts
-    are merged when their cosine similarity reaches the threshold, so a comma
-    that joins one thought does not become two topics.
-    """
-    if isinstance(text, list):
-        sentences = [s.strip() for s in text if s.strip()]
-    else:
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-
-    if len(sentences) <= 1:
-        return sentences
-
-    embeddings = get_model().encode(sentences, convert_to_numpy=True)
-
+    """Join neighbouring parts whose meanings are close enough to be one thought."""
     segments: list[str] = []
     current = sentences[0]
     for i in range(1, len(sentences)):
@@ -97,6 +81,58 @@ def segment_by_semantic_similarity(
         else:
             current += " " + sentences[i]
     segments.append(current)
+    return segments
+
+
+def _split_sentences(text: str | list[str]) -> list[str]:
+    if isinstance(text, list):
+        return [s.strip() for s in text if s.strip()]
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+
+def segment_by_semantic_similarity(
+    text: str | list[str], similarity_threshold: float = 0.0
+) -> list[str]:
+    """Split text into semantically distinct units.
+
+    Accepts a plain string (split on sentence boundaries) or an already-split
+    list, e.g. the comma-separated parts of a topic suggestion.  Adjacent parts
+    are merged when their cosine similarity reaches the threshold, so a comma
+    that joins one thought does not become two topics.
+    """
+    sentences = _split_sentences(text)
+    if len(sentences) <= 1:
+        return sentences
+    embeddings = get_model().encode(sentences, convert_to_numpy=True)
+    return _merge_adjacent(sentences, embeddings, similarity_threshold)
+
+
+def segment_all(corpus: list[str], similarity_threshold: float) -> list[str]:
+    """Segment a whole corpus with a single pass through the model.
+
+    Segmenting comment by comment meant one ``encode`` call per response — a few
+    hundred forward passes, each paying the full fixed cost of tokenising and
+    dispatching a batch of two or three short phrases. The parts are independent
+    of one another, so they can all be embedded together and the per-comment
+    merge applied afterwards; the segments come out the same either way.
+    """
+    per_comment = [_split_sentences(comment.split(",")) for comment in corpus]
+
+    flat: list[str] = []
+    for parts in per_comment:
+        if len(parts) > 1:
+            flat.extend(parts)
+    embeddings = get_model().encode(flat, convert_to_numpy=True) if flat else None
+
+    segments: list[str] = []
+    offset = 0
+    for parts in per_comment:
+        if len(parts) <= 1:
+            segments.extend(parts)
+            continue
+        window = embeddings[offset : offset + len(parts)]
+        offset += len(parts)
+        segments.extend(_merge_adjacent(parts, window, similarity_threshold))
     return segments
 
 
@@ -138,21 +174,11 @@ def cluster_comments(
             else settings.comment_cluster_distance
         )
 
-    prepared: list[str] = []
-    for comment in corpus:
-        if not isinstance(comment, str):
-            continue
-        if use_semantic_split:
-            parts = [p.strip() for p in comment.split(",") if p.strip()]
-            prepared.extend(
-                segment_by_semantic_similarity(
-                    parts, similarity_threshold=split_similarity_threshold
-                )
-            )
-        else:
-            stripped = comment.strip()
-            if stripped:
-                prepared.append(stripped)
+    texts = [comment for comment in corpus if isinstance(comment, str)]
+    if use_semantic_split:
+        prepared = segment_all(texts, split_similarity_threshold)
+    else:
+        prepared = [stripped for c in texts if (stripped := c.strip())]
 
     if not prepared:
         return ClusteredComments(raw=[], clustered=[])

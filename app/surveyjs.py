@@ -156,13 +156,7 @@ def validate_payload(survey: Survey, payload: dict[str, Any]) -> dict[str, Any]:
             raw = payload.get(f"{prefix}_{key}")
             if raw is None:
                 continue
-            try:
-                value = int(raw)
-            except (TypeError, ValueError):
-                raise ValidationProblem(f"Ungültiger Wert für {prefix}_{key}.") from None
-            if not 1 <= value <= 5:
-                raise ValidationProblem(f"Wert für {prefix}_{key} liegt außerhalb 1–5.")
-            cleaned[f"{prefix}_{key}"] = value
+            cleaned[f"{prefix}_{key}"] = _rating_value(raw, f"{prefix}_{key}")
 
     comments = payload.get(LECTURE_COMMENTS_QUESTION)
     if isinstance(comments, dict):
