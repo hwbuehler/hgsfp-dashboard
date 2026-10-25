@@ -18,9 +18,28 @@ from app.models import Response, Survey, utcnow
 
 DISCARDED_KEYS = frozenset({"HappendAt", "HappenedAt", "InstanceId"})
 
+# Some survey forms used a different prefix for the skill-course comment field
+# than for the rating fields (``sk_comment`` vs ``sc_title``).  The analysis
+# looks for ``{prefix}_comment`` where ``prefix`` comes from ``{prefix}_title``,
+# so the mismatched comment keys are renamed on import to keep the comments.
+COMMENT_KEY_RENAMES = {"sk_comment": "sc_comment"}
+
 
 class ImportError_(ValueError):
     """Raised when a file does not look like a survey export."""
+
+
+def _normalise_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Drop operational metadata and fix known comment-key mismatches."""
+    cleaned = {k: v for k, v in entry.items() if k not in DISCARDED_KEYS}
+    comments = cleaned.get("sugg_lectures")
+    if isinstance(comments, dict):
+        renamed = {
+            COMMENT_KEY_RENAMES.get(k, k): v for k, v in comments.items()
+        }
+        if renamed != comments:
+            cleaned["sugg_lectures"] = renamed
+    return cleaned
 
 
 def parse_export(raw: str | bytes) -> list[dict[str, Any]]:
@@ -40,7 +59,7 @@ def parse_export(raw: str | bytes) -> list[dict[str, Any]]:
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        cleaned.append({k: v for k, v in entry.items() if k not in DISCARDED_KEYS})
+        cleaned.append(_normalise_entry(entry))
     if not cleaned:
         raise ImportError_("Die Datei enthält keine Antworten.")
     return cleaned

@@ -82,9 +82,10 @@
 
       <table class="data" style="margin-top: 24px">
         <thead>
-          <tr><th>Abschnitt</th><th class="numeric">Antworten</th><th></th></tr>
+          <tr><th>Section</th><th class="numeric">Responses</th><th></th></tr>
         </thead>
         <tbody>
+          {% set seen_lecturers = [] %}
           {% for section in context.sections %}
             <tr>
               <td>{{ section.title }}{% if section.scope.startswith('lecture-') and section.subtitle %} — {{ section.subtitle }}{% endif %}</td>
@@ -92,10 +93,13 @@
               <td style="text-align: right">
                 <span class="row-actions">
                   <a class="button button-quiet"
-                     href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">Vorschau</a>
+                     href="/surveys/{{ survey.id }}/report/{{ section.scope }}" target="_blank">Preview</a>
                   {% if section.scope.startswith('lecture-sc-') %}
-                    <a class="button button-quiet"
-                       href="/surveys/{{ survey.id }}/skill-course-pdf?lecturer={{ section.title | urlencode }}">Lecturer PDF</a>
+                    {% if section.title not in seen_lecturers %}
+                      {% set _ = seen_lecturers.append(section.title) %}
+                      <a class="button button-quiet"
+                         href="/surveys/{{ survey.id }}/skill-course-pdf?lecturer={{ section.title | urlencode }}">Lecturer PDF (all courses)</a>
+                    {% endif %}
                   {% else %}
                     <a class="button button-quiet"
                        href="/surveys/{{ survey.id }}/report/{{ section.scope }}/pdf">PDF</a>

@@ -126,42 +126,14 @@ app/
   db.py            SQLite-Engine mit WAL-PRAGMAs
   models.py        Datenmodell
   security.py      argon2-Hashing, Cookie-Session
-  blueprint.py     SurveyJS-Original -> wiederverwendbare Blaupause
-  slide.py         16:9-Einladungsfolie als PDF (fpdf2)
   routers/         auth · dashboard · reports
   analysis/        Portierung aus hgsfp-survey-tool, siehe unten
-  templates/       Jinja2 (Dashboard deutsch, Formular und Report englisch)
+  templates/       Jinja2 (Dashboard und Reports auf Englisch)
   static/          CSS, htmx, Report-Assets
-reference/         Original-Fragebogen und Beispiel-Ergebnisse
+reference/         Beispiel-Ergebnisse (Sample-Daten)
 scripts/           create_user · fetch_model · verify_pdf
 deploy/            Dockerfile, docker-compose.yml, Caddyfile
 ```
-
-### Parametrisierung des Fragebogens
-
-`reference/surveyjs-original.json` ist der handgeschriebene Fragebogen. Zwischen zwei Durchläufen
-ändern sich daran nur der Titel und die Dropdown-Einträge — Fragetexte, Skalen und die
-`visibleIf`-Logik nicht.
-
-`scripts/bootstrap_template.py` zerlegt die Datei deshalb einmalig in eine Blaupause: eine
-Vorlesungs-Seite mit `{prefix}` als Platzhalter, die Vorschlags-Seite und die Grundeinstellungen.
-`app/surveyjs.py` klont die Seite je Zeitfenster und setzt Präfix und Auswahlliste ein. Dadurch
-bleibt jedes Original-Attribut erhalten und die Zahl der Zeitfenster ist frei — drei ist der
-heutige Fall, keine Grenze.
-
-`tests/test_surveyjs.py` fährt den Weg rückwärts und vergleicht mit dem Original, damit beim
-Generieren nichts verloren geht.
-
-Beim Extrahieren wird bewusst vereinheitlicht:
-
-| Stelle im Original | Änderung |
-|---|---|
-| `{"default": …, "de": …}` | auf den englischen Text reduziert |
-| `noneText` | entfällt (uneinheitlich gesetzt, ohne `showNoneItem` wirkungslos) |
-| `isRequired` fehlt bei `ml_level` | überall gesetzt |
-| `displayMode` fehlt bei `ml_exciting`, `ml_structure` | überall `buttons` — sonst erscheinen dieselben Fragen auf der Vormittagsseite als Sterne, auf den anderen Seiten als Buttons |
-| `completedHtml`: „survey!You“ | Leerzeichen ergänzt |
-| `logo` von `hgsfp.uni-heidelberg.de` | lokale Kopie unter `/static/img/` — ein externer Request würde die IP jeder teilnehmenden Person an einen Fremdserver übertragen |
 
 ### Analyse
 
@@ -240,30 +212,22 @@ docker run --rm -v "$PWD/build:/app/build" hgsfp-dashboard:test \
 
 ## Datenschutz
 
-Die Umsetzung folgt der Vorgabe, dass Antworten anonym sind:
+Das Dashboard ist ein reines Analyse-Tool: Es gibt keine öffentliche Abgabe-Route,
+Teilnehmer füllen den Fragebogen auf einer externen SurveyJS-Instanz aus und laden
+nur das Ergebnis-JSON hoch.
 
-- **Keine identifizierenden Daten.** Weder Name noch E-Mail, IP-Adresse, User-Agent oder
-  Session-Cookie werden zu einer Antwort gespeichert.
-- **Kein Zeitstempel, nur ein Datum.** Die Uhrzeit einer Abgabe würde eine Zuordnung erlauben.
-- **Zufällige IDs.** Antworten bekommen eine UUID statt einer laufenden Nummer, damit sich die
-  Reihenfolge der Abgaben nicht rekonstruieren lässt.
-- **Keine Drittanbieter.** SurveyJS-Runtime, htmx, Schriften und Logo sind lokal abgelegt; das
-  Formular lädt nichts von fremden Servern.
-- **Hinweis vor dem Start.** Über dem Fragebogen steht ein kurzer Datenschutzhinweis, ausführlich
-  unter `/privacy` — dort sind Verantwortliche und Datenschutzbeauftragte noch einzutragen.
-- **Löschung.** Unter *Daten* lassen sich einzeln die Antworten oder die gesamte Umfrage samt
-  Auswertungen entfernen.
+- **Keine identifizierenden Daten im Import.** `HappendAt` und `InstanceId` werden
+  beim Import verworfen — ein exakter Zeitstempel ist genau die Metadaten, die eine
+  Anonymitätszusage ausschließen.
+- **Zufällige IDs.** Antworten bekommen eine UUID statt einer laufenden Nummer.
+- **Keine Drittanbieter.** htmx und alle Schriften sind lokal abgelegt; das Dashboard
+  lädt nichts von fremden Servern (kein Google Fonts, kein CDN).
+- **Löschung.** Unter *Data* lassen sich einzeln die Antworten oder der gesamte
+  Datensatz samt Auswertungen entfernen.
 - **Passwörter** werden mit argon2 gehasht.
-- **Obergrenzen für Eingaben.** Die öffentliche Abgabe-Route nimmt JSON von jeder Person mit dem
-  Link entgegen, deshalb ist jede Eingabe begrenzt: Request-Body (`HGSFP_MAX_SUBMISSION_BYTES`,
-  256 kB), Länge eines Freitextfeldes (`HGSFP_MAX_FREE_TEXT_CHARS`, 5000 Zeichen, wird gekürzt
-  statt abgelehnt) und Upload-Größe beim Import (`HGSFP_MAX_UPLOAD_BYTES`, 25 MB). Ohne diese
-  Grenzen kann eine einzige Anfrage die Datenbank beliebig groß machen — und das Clustering
-  versucht anschließend, den Text einzubetten.
-- **TLS** übernimmt der Reverse Proxy; die `Caddyfile` setzt HSTS und eine restriktive CSP und
-  filtert IP-Adressen aus dem Zugriffsprotokoll.
-
-Der Import alter Ergebnisdateien verwirft `HappendAt` und `InstanceId`.
+- **Upload-Obergrenze.** `HGSFP_MAX_UPLOAD_BYTES` (25 MB) begrenzt die Größe einer
+  hochgeladenen Ergebnisdatei.
+- **TLS** übernimmt der Reverse Proxy; die `Caddyfile` setzt HSTS und eine restriktive CSP.
 
 ---
 
@@ -274,16 +238,13 @@ pytest
 ```
 
 - `tests/test_analysis.py` — vergleicht Mittelwerte, Standardabweichungen, n, DnA-Zählungen und
-  Kommentarzahlen mit `tests/data/golden_statistics.json`, das aus dem Original-Analyzer stammt.
-  Schlägt hier etwas fehl, hat die Portierung eine Zahl verändert.
-- `tests/test_surveyjs.py` — Round-Trip des Fragebogens, Antwort-Validierung, Charts.
-- `tests/test_api.py` — Auth-Grenze, öffentliches Formular, Import/Export, Löschung.
-
-Lasttest gegen einen laufenden Server:
-
-```bash
-python scripts/load_test.py http://127.0.0.1:8000/s/<token> --count 300
-```
+  Kommentarzahlen mit `tests/data/golden_statistics.json`, das aus dem Original-Analyzer stammt
+  (überspringt die Golden-Tests, wenn die Datei fehlt). Zusätzlich: Verhalten, das das Original
+  nicht hatte (fehlende Keys, Schwellenwerte, Kommentar-Filter).
+- `tests/test_api.py` — Auth-Grenze, Import (`POST /imports`), Lecturer-Details, Analyse-Job,
+  Export, Löschung, Report-Rendering.
+- `tests/test_templates.py` — Templates und statische Assets vorhanden, CSS-Klassen definiert.
+- `tests/test_clustering.py` — Kommentar-Clustering (übersprungen ohne Modell).
 
 ---
 

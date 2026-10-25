@@ -14,8 +14,17 @@ router = APIRouter(tags=["auth"])
 
 
 def _safe_next(candidate: str | None) -> str:
-    """Only allow same-site paths, so ?next= cannot bounce users off-site."""
-    if not candidate or not candidate.startswith("/") or candidate.startswith("//"):
+    """Only allow same-site paths, so ?next= cannot bounce users off-site.
+
+    Browsers normalise backslashes to forward slashes in URLs, so ``/\\evil.com``
+    is treated as ``//evil.com`` — a protocol-relative redirect. Rejecting
+    backslashes and control characters closes that bypass.
+    """
+    if not candidate or not candidate.startswith("/"):
+        return "/dashboard"
+    if candidate.startswith("//") or "\\" in candidate:
+        return "/dashboard"
+    if any(ord(c) < 0x20 for c in candidate):
         return "/dashboard"
     return candidate
 

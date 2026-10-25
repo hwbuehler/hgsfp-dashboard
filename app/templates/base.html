@@ -20,6 +20,7 @@
               {% if survey is defined and survey %}
                 <a href="/surveys/{{ survey.id }}/report">Analysis overview</a>
                 <a href="/surveys/{{ survey.id }}/lectures">Lecturer names &amp; lecture titles</a>
+                <a href="/surveys/{{ survey.id }}/data">Data &amp; deletion</a>
                 {% if context is defined and context %}
                   <span class="page-menu-heading">Report pages</span>
                   {% for section in context.sections %}

@@ -1,4 +1,9 @@
-"""Survey list, creation, data import/export and deletion."""
+"""Analysis dataset list, import, data management and deletion.
+
+The dashboard is analysis-only: datasets are created by uploading a SurveyJS
+result export (``POST /imports``), then managed from here — lecturer names
+are assigned, data is exported or deleted.
+"""
 
 from __future__ import annotations
 
@@ -10,13 +15,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from starlette.concurrency import run_in_threadpool
 
 from app.analysis.legacy_import import (
     ImportError_,
     derive_slots,
-    derive_slot_choices,
-    import_into,
     parse_export,
 )
 from app.config import settings
@@ -27,7 +29,6 @@ from app.models import (
     Survey,
     SurveySlot,
     SurveyStatus,
-    SurveyTemplate,
     User,
     utcnow,
 )
@@ -78,6 +79,28 @@ def survey_list(
             "error": error,
         },
     )
+
+
+async def read_upload(file: UploadFile) -> bytes:
+    """Read an uploaded file into memory, refusing anything oversized.
+
+    ``UploadFile.read()`` with no argument is unbounded: the file is buffered to
+    disk by Starlette and then pulled into RAM in full.  A result export is well
+    under a megabyte, so a ceiling costs nothing and keeps a mistyped upload
+    from taking the process down.
+    """
+    limit = settings.max_upload_bytes
+    chunks: list[bytes] = []
+    received = 0
+    while chunk := await file.read(64 * 1024):
+        received += len(chunk)
+        if received > limit:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Die Datei ist größer als {limit // (1024 * 1024)} MB.",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @router.post("/imports")
@@ -182,195 +205,6 @@ async def update_lecture_details(
     )
 
 
-def title_taken(session: Session, title: str, exclude_id: int | None = None) -> bool:
-    """Whether another survey already carries this title.
-
-    Two runs with the same name are indistinguishable everywhere the title is
-    shown — the list, the report heading, the exported PDF filenames — so the
-    second one is refused rather than silently created.
-    """
-    statement = select(Survey.id).where(func.lower(Survey.title) == title.strip().lower())
-    if exclude_id is not None:
-        statement = statement.where(Survey.id != exclude_id)
-    return session.scalars(statement).first() is not None
-
-
-async def read_upload(file: UploadFile) -> bytes:
-    """Read an uploaded file into memory, refusing anything oversized.
-
-    ``UploadFile.read()`` with no argument is unbounded: the file is buffered to
-    disk by Starlette and then pulled into RAM in full.  A result export is well
-    under a megabyte, so a ceiling costs nothing and keeps a mistyped upload
-    from taking the process down.
-    """
-    limit = settings.max_upload_bytes
-    chunks: list[bytes] = []
-    received = 0
-    while chunk := await file.read(64 * 1024):
-        received += len(chunk)
-        if received > limit:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Die Datei ist größer als {limit // (1024 * 1024)} MB.",
-            )
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-DUPLICATE_TITLE_MESSAGE = (
-    "Es gibt bereits eine Umfrage mit diesem Titel. Bitte einen anderen wählen, "
-    "etwa mit Jahreszahl oder Durchgangsnummer."
-)
-
-
-def seed_slots(
-    session: Session,
-    survey: Survey,
-    template: SurveyTemplate,
-    choices_override: dict[str, list[str]] | None = None,
-) -> None:
-    """Create the survey's slots from the template blueprint.
-
-    ``choices_override`` replaces the blueprint's lecture list per slot prefix —
-    used when the survey is created from a results file, where the lectures in
-    the data are what matter, not the ones from the previous run.
-    """
-    for position, slot_spec in enumerate(template.blueprint_json.get("slots", [])):
-        slot = SurveySlot(
-            survey_id=survey.id,
-            key_prefix=slot_spec["key_prefix"],
-            page_title=slot_spec["page_title"],
-            position=position,
-            dna_value=slot_spec.get("dna_value", "DnA"),
-            dna_text=slot_spec.get("dna_text", "did not attend"),
-        )
-        session.add(slot)
-        session.flush()
-
-        if choices_override is None:
-            # One example per slot, not last run's full line-up. The blueprint
-            # carries every lecture of the run it was extracted from; seeding all
-            # of them means deleting five wrong entries before adding the right
-            # ones. A single row shows the expected shape and is quick to edit.
-            blueprint_choices = slot_spec.get("choices", [])
-            entries = [
-                (c["value"], c.get("text", c["value"]))
-                for c in blueprint_choices[:1]
-            ]
-        else:
-            # The file only carries the stored key; the display text starts out
-            # as that key and is edited afterwards.
-            entries = [(v, v) for v in choices_override.get(slot.key_prefix, [])]
-
-        for choice_position, (value, text) in enumerate(entries):
-            session.add(
-                SlotChoice(
-                    slot_id=slot.id, value=value, text=text, position=choice_position
-                )
-            )
-
-
-@router.post("/surveys")
-def create_survey(
-    title: str = Form(...),
-    template_id: int = Form(...),
-    user: User = Depends(require_user),
-    session: Session = Depends(get_session),
-):
-    template = session.get(SurveyTemplate, template_id)
-    if template is None:
-        raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
-
-    clean_title = title.strip() or template.name
-    if title_taken(session, clean_title):
-        return RedirectResponse(
-            f"/dashboard?error={quote(DUPLICATE_TITLE_MESSAGE)}",
-            status_code=status.HTTP_303_SEE_OTHER,
-        )
-
-    survey = Survey(
-        template_id=template.id,
-        title=clean_title,
-        public_token=secrets.token_urlsafe(12),
-        created_by_id=user.id,
-    )
-    session.add(survey)
-    session.flush()
-
-    seed_slots(session, survey, template)
-    session.commit()
-    return RedirectResponse(
-        f"/surveys/{survey.id}/edit", status_code=status.HTTP_303_SEE_OTHER
-    )
-
-
-@router.post("/surveys/from-file")
-async def create_survey_from_file(
-    title: str = Form(...),
-    template_id: int = Form(...),
-    file: UploadFile = File(...),
-    user: User = Depends(require_user),
-    session: Session = Depends(get_session),
-):
-    """Create a survey straight from a results file.
-
-    Saves the round trip of creating an empty survey, hunting for the import
-    page, and then correcting the lecture list by hand.
-    """
-    template = session.get(SurveyTemplate, template_id)
-    if template is None:
-        raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
-
-    clean_title = title.strip() or template.name
-    if title_taken(session, clean_title):
-        return RedirectResponse(
-            f"/dashboard?error={quote(DUPLICATE_TITLE_MESSAGE)}",
-            status_code=status.HTTP_303_SEE_OTHER,
-        )
-
-    raw = await read_upload(file)
-
-    # Parsing a result file and writing a few hundred rows is all blocking
-    # work.  Run in the threadpool so an import started mid-collection cannot
-    # stall participants submitting at the same time.
-    def build() -> tuple[int, int]:
-        payloads = parse_export(raw)
-        prefixes = [s["key_prefix"] for s in template.blueprint_json.get("slots", [])]
-        survey = Survey(
-            template_id=template.id,
-            title=clean_title,
-            public_token=secrets.token_urlsafe(12),
-            created_by_id=user.id,
-            # Archived data is not open for new responses.
-            status=SurveyStatus.closed,
-            closed_at=utcnow(),
-        )
-        session.add(survey)
-        session.flush()
-        seed_slots(session, survey, template, derive_slot_choices(payloads, prefixes))
-
-        today = utcnow().date()
-        session.add_all(
-            ResponseRow(survey_id=survey.id, payload_json=payload, submitted_on=today)
-            for payload in payloads
-        )
-        session.commit()
-        return survey.id, len(payloads)
-
-    try:
-        survey_id, imported = await run_in_threadpool(build)
-    except ImportError_ as exc:
-        session.rollback()
-        return RedirectResponse(
-            f"/dashboard?error={quote(str(exc))}", status_code=status.HTTP_303_SEE_OTHER
-        )
-
-    return RedirectResponse(
-        f"/surveys/{survey_id}/report?created={imported}",
-        status_code=status.HTTP_303_SEE_OTHER,
-    )
-
-
 @router.post("/surveys/{survey_id}/delete")
 def delete_survey(
     survey_id: int,
@@ -406,7 +240,6 @@ def delete_responses(
 def data_page(
     request: Request,
     survey_id: int,
-    imported: int | None = None,
     deleted: int | None = None,
     error: str | None = None,
     user: User = Depends(require_user),
@@ -423,32 +256,9 @@ def data_page(
             "user": user,
             "survey": survey,
             "response_count": count or 0,
-            "imported": imported,
             "deleted": deleted,
             "error": error,
         },
-    )
-
-
-@router.post("/surveys/{survey_id}/import")
-async def import_responses(
-    survey_id: int,
-    file: UploadFile = File(...),
-    user: User = Depends(require_user),
-    session: Session = Depends(get_session),
-):
-    survey = get_survey(session, survey_id)
-    raw = await read_upload(file)
-    try:
-        count = await run_in_threadpool(import_into, session, survey, raw)
-    except ImportError_ as exc:
-        session.rollback()
-        return RedirectResponse(
-            f"/surveys/{survey_id}/data?error={quote(str(exc))}",
-            status_code=status.HTTP_303_SEE_OTHER,
-        )
-    return RedirectResponse(
-        f"/surveys/{survey_id}/data?imported={count}", status_code=status.HTTP_303_SEE_OTHER
     )
 
 
