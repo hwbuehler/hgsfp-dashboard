@@ -1,7 +1,8 @@
-/* Dashboard chrome — Modernist: flat, Archivo, red accent, zero radius, 2px rules.
-   German-language editor UI for non-technical colleagues. */
-
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap');
+/* Dashboard chrome — Modernist: flat, system font stack, red accent, zero radius,
+   2px rules. German-language analysis UI for non-technical colleagues.
+   No external font @import: the Caddyfile CSP is default-src 'self', so a
+   Google Fonts request would be blocked anyway — and the privacy stance is
+   that nothing loads from a third-party server. */
 
 :root {
   --bg: #f3f2f2;
@@ -18,8 +19,8 @@
   --accent-100: #fff2ef;
   --neutral-100: #f8f4f4;
   --neutral-800: #444141;
-  --font-heading: "Archivo", system-ui, sans-serif;
-  --font-body: "Archivo", system-ui, sans-serif;
+  --font-heading: system-ui, sans-serif;
+  --font-body: system-ui, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --radius: 0px;
   --page: 1240px;
@@ -188,7 +189,7 @@ main {
   .topbar-inner { padding: 0 20px; }
 }
 
-/* --- Survey context header and tabs ------------------------------------ */
+/* --- Survey context header --------------------------------------------- */
 
 .survey-meta {
   display: flex;
@@ -197,62 +198,6 @@ main {
   flex-wrap: wrap;
   font-size: 13px;
   color: var(--ink-muted);
-}
-
-.tabs {
-  display: flex;
-  gap: 28px;
-  margin-top: 24px;
-  border-bottom: 2px solid var(--rule);
-  overflow-x: auto;
-}
-
-.tab {
-  display: inline-flex;
-  align-items: center;
-  padding: 10px 2px;
-  margin-bottom: -2px;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .01em;
-  text-decoration: none;
-  white-space: nowrap;
-  color: var(--ink-muted);
-  border-bottom: 2px solid transparent;
-}
-
-.tab:hover { color: var(--ink); }
-.tab[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
-
-/* --- Stats ------------------------------------------------------------- */
-
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  border-bottom: 2px solid var(--rule);
-}
-
-.stat { padding: 20px; border-left: 1px solid var(--rule-soft); }
-.stat:first-child { padding-left: 0; border-left: none; }
-
-.stat-value {
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 34px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-accent { color: var(--accent); }
-
-.stat-label {
-  font-size: 11px;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  margin-top: 6px;
 }
 
 /* --- Cards / panels ---------------------------------------------------- */
@@ -273,25 +218,6 @@ main {
   padding: 24px;
   margin-top: 24px;
 }
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.tile {
-  display: block;
-  padding: 14px;
-  border: 1px solid var(--rule-soft);
-  text-decoration: none;
-  color: inherit;
-  background: var(--bg);
-}
-
-.tile:hover { border-color: var(--accent); background: var(--accent-100); color: inherit; }
-.tile .tile-title { font-family: var(--font-heading); font-weight: 800; font-size: 15px; line-height: 1.2; }
-.tile .tile-meta { color: var(--ink-muted); font-size: 12px; margin-top: 6px; }
 
 /* A row of one label plus one action — used for status changes and deletion. */
 
@@ -428,13 +354,6 @@ table.data td {
 
 table.data tbody tr:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 
-table.data td.when {
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--ink-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
 table.data th.numeric,
 table.data td.numeric {
   text-align: right;
@@ -462,21 +381,6 @@ tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
   .row-actions { opacity: 1; }
 }
 
-/* --- Status chips ------------------------------------------------------ */
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: var(--radius);
-  font-size: 11px;
-  letter-spacing: .02em;
-}
-
-.chip-draft { border: 1px solid var(--accent); color: var(--accent); }
-.chip-published { background: var(--accent-100); color: var(--accent-800); }
-.chip-closed { background: var(--neutral-100); color: var(--neutral-800); }
-
 /* --- Messages ---------------------------------------------------------- */
 
 .notice {
@@ -499,78 +403,6 @@ tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
 .notice-ok { border-left-color: var(--ink); background: var(--surface); color: var(--ink); }
 .notice .button-row { margin-left: auto; }
 
-/* --- Editor choices ---------------------------------------------------- */
-
-.choice-list { list-style: none; margin: 0 0 12px; padding: 0; }
-
-.choice-list li {
-  display: grid;
-  grid-template-columns: 1fr 200px auto;
-  gap: 12px;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--rule-soft);
-}
-
-.choice-text { font-weight: 500; }
-.choice-edit { display: contents; }
-.choice-list input[type="text"] { min-height: 34px; }
-.choice-list .key-input { font-family: var(--mono); font-size: 13px; }
-
-.choice-key {
-  font-family: var(--mono);
-  font-size: 13px;
-  background: var(--surface);
-  border: 1px solid var(--rule-soft);
-  padding: 3px 7px;
-  color: var(--ink-secondary);
-}
-
-.slot-block { border-top: 1px solid var(--rule-soft); padding-top: 24px; margin-top: 24px; }
-.slot-block:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-
-.column-labels {
-  display: grid;
-  grid-template-columns: 1fr 200px auto;
-  gap: 12px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--ink-muted);
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--rule);
-}
-
-/* --- Distribution ------------------------------------------------------ */
-
-.share-grid {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 48px;
-  align-items: start;
-}
-
-@media (max-width: 860px) {
-  .share-grid { grid-template-columns: 1fr; gap: 24px; }
-}
-
-.qr-panel img {
-  width: 100%;
-  max-width: 280px;
-  aspect-ratio: 1;
-  border: 1px solid var(--rule-soft);
-  background: var(--surface);
-}
-
-.link-box {
-  font-family: var(--mono);
-  font-size: 15px;
-  background: var(--surface);
-  border: 1px solid var(--rule-soft);
-  padding: 14px 16px;
-  word-break: break-all;
-}
-
 /* --- Analysis status --------------------------------------------------- */
 
 .status-line { display: flex; align-items: center; gap: 10px; }
@@ -587,42 +419,6 @@ tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.preview-frame {
-  width: 100%;
-  height: 78vh;
-  border: 1px solid var(--rule-soft);
-  background: #fff;
-}
-
-/* --- Save feedback ----------------------------------------------------- */
-
-.save-state {
-  font-size: 12px;
-  color: var(--accent-800);
-  background: var(--accent-100);
-  padding: 4px 10px;
-  white-space: nowrap;
-}
-
-.save-state.is-error { color: var(--bg); background: var(--accent-700); }
-
-.save-pending { display: none; font-size: 12px; color: var(--ink-muted); }
-form.htmx-request .save-pending { display: inline; }
-form.htmx-request .save-state { display: none; }
-
-.autosave-hint { font-size: 12px; color: var(--ink-muted); }
-
-.choice-list li.is-just-saved { animation: just-saved 2.4s ease-out; }
-
-@keyframes just-saved {
-  0%, 45% { background: var(--accent-100); }
-  100% { background: transparent; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .choice-list li.is-just-saved { animation: none; background: var(--accent-100); }
-}
-
 /* --- Login ------------------------------------------------------------- */
 
 .login { max-width: 420px; margin: 8vh 0 0; }
@@ -630,28 +426,3 @@ form.htmx-request .save-state { display: none; }
 .login h1 { font-size: 40px; }
 .hr { height: 2px; border: 0; margin: 28px 0; background: var(--rule); }
 .button-block { width: 100%; justify-content: flex-start; }
-
-/* Current publication state, stated plainly above the actions that change it. */
-.status-panel {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 16px;
-  margin-bottom: 20px;
-  background: var(--surface-sunken, #f8fafc);
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--radius);
-}
-
-/* The participation link doubles as a copy button. */
-button.link-box {
-  display: block;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  font-weight: normal;
-}
-
-button.link-box.is-copied { border-color: var(--accent); }
-button.link-box.is-copied::after { content: " — kopiert"; color: var(--accent); }

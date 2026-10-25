@@ -5,8 +5,9 @@
   <div>
     <a class="kicker" href="/surveys/{{ survey.id }}/report">← {{ survey.title }}</a>
     <h1>Lecturer names and lecture titles</h1>
-    <p class="section-note">For skill courses, set the same lecturer name on every course they taught. Each course keeps its own title and report section.</p>
+    <p class="section-note">For skill courses, set the same lecturer name on every course they taught. Each course keeps its own title and report section, and courses with the same lecturer name are merged into one PDF.</p>
   </div>
+  <a class="button button-secondary" href="/surveys/{{ survey.id }}/data">Data &amp; deletion</a>
 </div>
 
 {% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}

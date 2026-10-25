@@ -1,8 +1,11 @@
-"""Prove the ported analysis returns exactly what the original tool returned.
+"""Analysis correctness: golden comparison and self-contained behaviour tests.
 
-tests/data/golden_statistics.json was produced by running
+Part 1 compares against tests/data/golden_statistics.json, produced by running
 hgsfp-survey-tool/survey_analyzer.py against reference/sample-survey-results.json.
-If any of these fail, the port has changed a number that colleagues rely on.
+If any of those fail, the port has changed a number that colleagues rely on.
+
+Part 2 tests behaviour the original did not have (missing keys, thresholds,
+comment filtering) and runs even without the golden file.
 """
 
 from __future__ import annotations
@@ -17,20 +20,18 @@ from app.analysis.constants import CONSTANTS
 from app.analysis.statistics import compute_stats
 
 GOLDEN_PATH = Path(__file__).parent / "data" / "golden_statistics.json"
+GOLDEN_AVAILABLE = GOLDEN_PATH.exists()
 
-if not GOLDEN_PATH.exists():
-    # The fixture is the *original tool's* output, so it cannot be regenerated
-    # from this code — doing so would make these tests assert that the port
-    # matches itself.  Skip the module instead of failing at import time, which
-    # would abort collection and take the whole suite down with it.
-    pytest.skip(
-        f"{GOLDEN_PATH.relative_to(Path(__file__).parent.parent)} is missing — "
-        "produce it by running hgsfp-survey-tool/survey_analyzer.py against "
-        "reference/sample-survey-results.json.",
-        allow_module_level=True,
-    )
+if GOLDEN_AVAILABLE:
+    GOLDEN = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+else:
+    GOLDEN = None
 
-GOLDEN = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+needs_golden = pytest.mark.skipif(
+    not GOLDEN_AVAILABLE,
+    reason=f"{GOLDEN_PATH.name} is missing — produce it by running "
+    "hgsfp-survey-tool/survey_analyzer.py against reference/sample-survey-results.json.",
+)
 
 
 def _stats_by_question(results):
@@ -43,12 +44,17 @@ def _all_lectures(aggregated):
             yield prefix, name, results
 
 
+# --- Golden comparison (requires tests/data/golden_statistics.json) -----------
+
+
+@needs_golden
 def test_lectures_match_the_original(aggregated):
     found = {name for _, name, _ in _all_lectures(aggregated)}
     expected = {k for k in GOLDEN["statistics"] if not k.startswith("Overall")}
     assert found == expected
 
 
+@needs_golden
 @pytest.mark.parametrize("question", CONSTANTS.question_keys)
 def test_lecture_statistics_match_the_original(aggregated, question):
     for _, name, results in _all_lectures(aggregated):
@@ -63,6 +69,7 @@ def test_lecture_statistics_match_the_original(aggregated, question):
             assert stat.std == pytest.approx(gold_std, abs=1e-9), f"{name}/{question}: std"
 
 
+@needs_golden
 @pytest.mark.parametrize(
     "scope,golden_key",
     [
@@ -84,20 +91,24 @@ def test_aggregate_statistics_match_the_original(aggregated, scope, golden_key):
             assert stats[question].std == pytest.approx(gold_std, abs=1e-9)
 
 
+@needs_golden
 def test_did_not_attend_counts_match_the_original(aggregated):
     assert aggregated.dna_counts == GOLDEN["dna"]
 
 
+@needs_golden
 def test_lecture_comment_counts_match_the_original(aggregated):
     for prefix, name, results in _all_lectures(aggregated):
         assert len(results["comments"]) == GOLDEN["comment_counts"][prefix][name], name
 
 
+@needs_golden
 def test_free_text_counts_match_the_original(aggregated):
     assert len(aggregated.organization) == GOLDEN["organization_count"]
     assert len(aggregated.topics) == GOLDEN["topics_count"]
 
 
+@needs_golden
 def test_total_responses(aggregated):
     assert aggregated.total_responses == GOLDEN["overall_count"]
 

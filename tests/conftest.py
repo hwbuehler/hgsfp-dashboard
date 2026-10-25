@@ -14,36 +14,28 @@ os.environ.setdefault("HGSFP_DATABASE_PATH", "data/test.db")
 
 
 @pytest.fixture(scope="session")
-def reference_definition() -> dict:
-    path = PROJECT_ROOT / "reference" / "surveyjs-original.json"
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-@pytest.fixture(scope="session")
 def sample_responses() -> list[dict]:
     path = PROJECT_ROOT / "reference" / "sample-survey-results.json"
     return json.loads(path.read_text(encoding="utf-8"))["Data"]
 
 
 @pytest.fixture(scope="session")
-def blueprint(reference_definition) -> dict:
-    from app.blueprint import extract_blueprint
-
-    return extract_blueprint(reference_definition)
-
-
-@pytest.fixture(scope="session")
-def slot_configs(blueprint):
+def slot_configs() -> list:
+    """Slot configuration matching the reference sample data (ml, al, il)."""
     from app.analysis.aggregate import SlotConfig
+    from app.analysis.legacy_import import derive_slots
 
+    with open(PROJECT_ROOT / "reference" / "sample-survey-results.json", encoding="utf-8") as f:
+        payloads = json.load(f)["Data"]
+    specs = derive_slots(payloads)
     return [
         SlotConfig(
             key_prefix=spec["key_prefix"],
             page_title=spec["page_title"],
-            dna_value=spec["dna_value"],
-            choice_texts={c["value"]: c["text"] for c in spec["choices"]},
+            dna_value="DnA",
+            choice_texts={c: c for c in spec["choices"]},
         )
-        for spec in blueprint["slots"]
+        for spec in specs
     ]
 
 

@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.analysis.aggregate import SlotConfig, aggregate  # noqa: E402
 from app.analysis.clustering import ClusteredComments, ModelUnavailable, cluster_comments  # noqa: E402
+from app.analysis.legacy_import import derive_slots, parse_export  # noqa: E402
 from app.analysis.pdf import PdfUnavailable, build_zip, render_pdf  # noqa: E402
 from app.analysis.report import (  # noqa: E402
     ReportContext,
@@ -25,8 +26,7 @@ from app.analysis.report import (  # noqa: E402
     build_sections,
     build_summary_rows,
 )
-from app.blueprint import load_reference_blueprint  # noqa: E402
-from app.config import PROJECT_ROOT, settings  # noqa: E402
+from app.config import settings  # noqa: E402
 from app.templating import templates  # noqa: E402
 
 CLUSTER_NOTE = "Grouping uses the all-MiniLM-L6-v2 sentence-transformer model."
@@ -41,18 +41,17 @@ def main() -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    blueprint = load_reference_blueprint(settings.reference_dir / "surveyjs-original.json")
-    responses = json.loads(
-        (settings.reference_dir / "sample-survey-results.json").read_text(encoding="utf-8")
-    )["Data"]
+    raw = (settings.reference_dir / "sample-survey-results.json").read_bytes()
+    responses = parse_export(raw)
+    specs = derive_slots(responses)
     slots = [
         SlotConfig(
-            key_prefix=s["key_prefix"],
-            page_title=s["page_title"],
-            dna_value=s["dna_value"],
-            choice_texts={c["value"]: c["text"] for c in s["choices"]},
+            key_prefix=spec["key_prefix"],
+            page_title=spec["page_title"],
+            dna_value="DnA",
+            choice_texts={c: c for c in spec["choices"]},
         )
-        for s in blueprint["slots"]
+        for spec in specs
     ]
 
     aggregated = aggregate(responses, slots)
